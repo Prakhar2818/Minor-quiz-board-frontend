@@ -1,16 +1,27 @@
 import React, { useEffect, useState, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Button, Card, Radio, Checkbox, Input, Progress, Space, Alert, Avatar, List, Result, message, Spin } from 'antd';
+import { 
+  Button, Card, Radio, Checkbox, Input, Progress, Space, 
+  Alert, Avatar, List, Result, message, Spin, Typography,
+  Row, Col, Tag
+} from 'antd';
 import { AuthContext } from "../config/AuthContext";
 import socket from "../socket";
 import axios from "../utils/axios";
+import { PlayCircleOutlined } from '@ant-design/icons';
+
+const { Title } = Typography;
 
 const QuizRoom = () => {
   const { code } = useParams();
   const navigate = useNavigate();
   const { auth } = useContext(AuthContext);
   
+  const [quiz, setQuiz] = useState({ createdBy: null });
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [isCreator, setIsCreator] = useState(false);
+  const [creatorId, setCreatorId] = useState(null);  // This will store the creator's ID
   const [players, setPlayers] = useState([]);
   const [quizStarted, setQuizStarted] = useState(false);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -19,32 +30,60 @@ const QuizRoom = () => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [quizEnded, setQuizEnded] = useState(false);
 
-  useEffect(() => {
-    const fetchQuizDetails = async () => {
-      try {
-        const response = await axios.get(`/api/quiz/${code}`);
-        const quizData = response.data;
-        
-        setQuestions(quizData.questions || []);
-        setQuizStarted(quizData.status === 'active');
-        setIsCreator(quizData.createdBy === auth.userId);
-        
-        if (quizData.players) {
-          setPlayers(quizData.players);
-        }
-      } catch (error) {
-        console.error("Failed to fetch quiz details:", error);
-        message.error("Failed to fetch quiz details");
-        navigate('/home');
-      } finally {
-        setLoading(false);
+  const fetchQuizDetails = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/quiz/${code}`);
+      const quizData = response.data;
+      
+      if (!quizData) {
+        throw new Error("Quiz not found");
       }
-    };
 
-    fetchQuizDetails();
+      // Set isCreator to true if the current username matches the quiz creator's name
+      const isCreatorStatus = quizData.creatorName === auth.username;
+      
+      console.log("=== Quiz Data Debug ===");
+      console.log("Quiz Data:", quizData);
+      console.log("Current username:", auth.username);
+      console.log("Quiz creatorName:", quizData.creatorName);
+      console.log("Is creator?", isCreatorStatus);
+      
+      setQuiz(quizData);
+      setQuestions(quizData.questions || []);
+      setQuizStarted(quizData.status === 'active');
+      setIsCreator(isCreatorStatus); // This will set isCreator to true if names match
+      
+      if (quizData.participants) {
+        setPlayers(quizData.participants);
+      }
+      
+      console.log("Creator status set to:", isCreatorStatus);
+      
+      setError(null);
+    } catch (error) {
+      console.error("Failed to fetch quiz details:", error);
+      const errorMessage = error.response?.data?.error || "Failed to load quiz";
+      setError(errorMessage);
+      message.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Call fetchQuizDetails when component mounts and when code or auth.userId changes
+  useEffect(() => {
+    if (!auth.userId) {
+      message.error("Please login to join the quiz");
+      navigate('/login');
+      return;
+    }
+    
+    if (code) {
+      fetchQuizDetails();
+    }
   }, [code, auth.userId, navigate]);
 
   useEffect(() => {
@@ -56,12 +95,13 @@ const QuizRoom = () => {
       code, 
       username: auth.username,
       userId: auth.userId,
-      isCreator: isCreator
+      creatorId: creatorId  // Use creatorId from state
     });
 
     socket.on("quiz-ended", () => {
       setQuizEnded(true);
       message.info("Quiz has ended!");
+      navigate(`/leaderboard/${code}`);
     });
 
     socket.on("player-joined", (data) => {
@@ -89,31 +129,39 @@ const QuizRoom = () => {
     });
 
     return () => {
-      socket.emit("leave-room", { code, username: auth.username, userId: auth.userId });
+      socket.emit("leave-room", { 
+        code, 
+        username: auth.username, 
+        userId: auth.userId
+      });
       socket.off("player-joined");
       socket.off("player-list");
       socket.off("quiz-started");
       socket.off("quiz-ended");
     };
-  }, [code, auth.username, auth.userId, isCreator]);
+  }, [code, auth.username, auth.userId, creatorId, navigate]);
 
   const handleStart = async () => {
+    // Check if current user is the creator
+    if (!isCreator || quiz.creatorName !== auth.username) {
+      message.error("Only the quiz creator can start the quiz");
+      return;
+    }
+
     try {
       const response = await axios.post(`/api/quiz/start`, {
         code,
-        userId: auth.userId
+        creatorName: auth.username
       });
 
       if (response.data.success) {
-        socket.emit('start-quiz', { 
-          code, 
-          questions: response.data.questions,
-          startedBy: auth.userId
-        });
+        socket.emit('start-quiz', { code });
         setQuizStarted(true);
         setQuestions(response.data.questions);
+        message.success("Quiz started successfully!");
       }
     } catch (error) {
+      console.error("Failed to start quiz:", error);
       message.error(error.response?.data?.error || 'Failed to start quiz');
     }
   };
@@ -149,79 +197,189 @@ const QuizRoom = () => {
   };
 
   const handleEndQuiz = async () => {
-    if (!isCreator) {
+    // Validate creator status using the quiz data
+    if (!isCreator || auth.userId !== quiz.userId) {
       message.error("Only the quiz creator can end the quiz");
       return;
     }
 
     try {
-      await axios.post(`/api/quiz/${code}/end`, {
-        userId: auth.userId
+      const response = await axios.post(`/api/quiz/${code}/end`, {
+        code,
+        userId: auth.userId,
+        createdBy: quiz.createdBy  // Use the createdBy from quiz data
       });
-      
-      socket.emit('end-quiz', { code });
-      setQuizEnded(true);
-      message.success("Quiz ended successfully");
-      navigate(`/leaderboard/${code}`);
+
+      if (response.data.success) {
+        socket.emit('end-quiz', { 
+          code,
+          userId: auth.userId,
+          creatorBy: quiz.createdBy
+        });
+        setQuizEnded(true);
+        message.success("Quiz ended successfully");
+        navigate(`/leaderboard/${code}`);
+      }
     } catch (error) {
+      console.error("Failed to end quiz:", error);
       message.error("Failed to end quiz");
     }
   };
 
+  const currentQuestion = questions[questionIndex] || {};
+
   if (loading) {
     return (
-      <div className="auth-container">
-        <Card className="auth-card">
-          <div style={{ textAlign: 'center', padding: '20px' }}>
+      <div className="quiz-container">
+        <Card className="quiz-card">
+          <div style={{ textAlign: 'center', padding: '40px' }}>
             <Spin size="large" />
-            <p style={{ marginTop: '10px' }}>Loading quiz...</p>
+            <Title level={4} style={{ marginTop: '20px' }}>Loading Quiz...</Title>
           </div>
         </Card>
       </div>
     );
   }
 
+  if (error) {
+    return (
+      <div className="quiz-container">
+        <Card className="quiz-card">
+          <Result
+            status="error"
+            title="Failed to load quiz"
+            subTitle={error}
+            extra={[
+              <Button type="primary" key="home" onClick={() => navigate('/home')}>
+                Back Home
+              </Button>
+            ]}
+          />
+        </Card>
+      </div>
+    );
+  }
+
+  if (!quiz) {
+    return (
+      <div className="quiz-container">
+        <Card className="quiz-card">
+          <Result
+            status="404"
+            title="Quiz Not Found"
+            subTitle="The quiz you're looking for doesn't exist."
+            extra={[
+              <Button type="primary" key="home" onClick={() => navigate('/home')}>
+                Back Home
+              </Button>
+            ]}
+          />
+        </Card>
+      </div>
+    );
+  }
+
+  const renderCreatorControls = () => {
+    // Check if current user is the creator
+    if (!isCreator || quiz.creatorName !== auth.username) {
+      return null;
+    }
+
+    return (
+      <div style={{ marginTop: '20px' }}>
+        <Alert
+          message="Host Controls"
+          description={
+            players.length < 2 
+              ? "Please wait for at least 2 players to join before starting the quiz."
+              : "You can now start the quiz. All players are ready!"
+          }
+          type={players.length < 2 ? "warning" : "success"}
+          showIcon
+          style={{ marginBottom: '20px' }}
+        />
+        <Button
+          type="primary"
+          size="large"
+          block
+          onClick={handleStart}
+          disabled={players.length < 2}
+          style={{ 
+            height: '50px',
+            fontSize: '18px',
+            backgroundColor: players.length < 2 ? '#d9d9d9' : '#1890ff',
+          }}
+          icon={<PlayCircleOutlined />}
+        >
+          {players.length < 2 ? 'Waiting for Players...' : 'Start Quiz Now'}
+        </Button>
+      </div>
+    );
+  };
+
   if (!quizStarted) {
     return (
-      <div className="auth-container">
+      <div className="quiz-container">
         <Card 
-          title={`Quiz Lobby (${code})`} 
-          className="auth-card"
-          extra={<span>Players: {players.length}</span>}
+          title={
+            <Space>
+              <Title level={3}>{quiz.title || 'Quiz Lobby'}</Title>
+              <Tag color="blue">Code: {code}</Tag>
+              {auth.userId === quiz.createdBy && 
+                <Tag color="gold">You are the host</Tag>
+              }
+            </Space>
+          }
+          className="quiz-card"
+          extra={
+            <Space>
+              <Tag color="cyan">Created by: {quiz.creatorName}</Tag>
+              <Avatar.Group maxCount={2}>
+                {players.map(player => (
+                  <Avatar key={player.userId}>
+                    {player.username?.[0]?.toUpperCase()}
+                  </Avatar>
+                ))}
+              </Avatar.Group>
+              <span>Players: {players.length}</span>
+            </Space>
+          }
         >
+          {renderCreatorControls()}
+          
           <List
-            header={<div style={{ fontWeight: 'bold' }}>Players in Lobby:</div>}
+            header={<Title level={4}>Players in Lobby</Title>}
             bordered
             dataSource={players}
             renderItem={(player) => (
               <List.Item>
                 <List.Item.Meta
                   avatar={
-                    <Avatar style={{ backgroundColor: '#1890ff' }}>
-                      {player.username ? player.username.charAt(0).toUpperCase() : '?'}
+                    <Avatar style={{ 
+                      backgroundColor: player.userId === quiz.createdBy ? '#f56a00' : '#1890ff' 
+                    }}>
+                      {player.username?.[0]?.toUpperCase()}
                     </Avatar>
                   }
-                  title={player.username || 'Anonymous'}
-                  description={player.userId === auth.userId ? '(You)' : 
-                             player.isCreator ? '(Creator)' : ''}
+                  title={
+                    <Space>
+                      {player.username}
+                      {player.userId === auth.userId && 
+                        <Tag color="green">You</Tag>
+                      }
+                      {player.userId === quiz.createdBy && 
+                        <Tag color="orange">Host</Tag>
+                      }
+                    </Space>
+                  }
                 />
               </List.Item>
             )}
           />
-          {isCreator ? (
-            <Space direction="vertical" style={{ width: '100%', marginTop: '20px' }}>
-              <Button 
-                type="primary" 
-                onClick={handleStart}
-                disabled={players.length < 1}
-                block
-              >
-                Start Quiz ({players.length} {players.length === 1 ? 'player' : 'players'})
-              </Button>
-            </Space>
-          ) : (
+          
+          {(!isCreator || auth.userId !== quiz.createdBy) && (
             <Alert
-              message="Waiting for quiz creator to start the quiz"
+              message="Waiting for host to start the quiz..."
               type="info"
               showIcon
               style={{ marginTop: '20px' }}
@@ -251,100 +409,96 @@ const QuizRoom = () => {
     );
   }
 
-  const currentQ = questions[questionIndex];
-
-  if (!currentQ) {
-    return (
-      <div className="auth-container">
-        <Card className="auth-card">
-          <div style={{ textAlign: 'center', padding: '20px' }}>
-            <Spin size="large" />
-            <p style={{ marginTop: '10px' }}>Loading question...</p>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
   return (
-    <div className="auth-container">
-      <Card 
-        title={`Question ${questionIndex + 1} of ${questions.length}`} 
-        className="auth-card"
-        extra={
-          <Space>
-            <span>Score: {score}</span>
-            {isCreator && (
-              <Button 
-                type="primary" 
-                danger
-                onClick={handleEndQuiz}
-              >
-                End Quiz
-              </Button>
-            )}
+    <div className="quiz-container">
+      <Card
+        className="quiz-card"
+        title={
+          <Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
+            <Title level={3}>{quiz.title}</Title>
+            <Space>
+              <Tag color="blue">Score: {score}</Tag>
+              {isCreator && createdBy === quiz.createdBy && (
+                <Button 
+                  type="primary" 
+                  danger
+                  onClick={handleEndQuiz}
+                >
+                  End Quiz
+                </Button>
+              )}
+            </Space>
           </Space>
         }
       >
-        <p>{currentQ.text}</p>
+        <Row gutter={[16, 16]}>
+          <Col span={24}>
+            <Progress 
+              percent={(timeLeft/30) * 100} 
+              status="active"
+              showInfo={false}
+            />
+            <div style={{ textAlign: 'center', marginBottom: '10px' }}>
+              Time Left: {timeLeft}s
+            </div>
+          </Col>
+          
+          <Col span={24}>
+            <Card type="inner" title={`Question ${questionIndex + 1} of ${questions.length}`}>
+              <Title level={4}>{currentQuestion.text}</Title>
+              
+              {currentQuestion.type === "single" && (
+                <Radio.Group 
+                  onChange={(e) => setAnswer(e.target.value)} 
+                  value={answer}
+                  disabled={submitted}
+                  style={{ width: '100%', marginTop: '20px' }}
+                >
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    {currentQuestion.options?.map((opt, idx) => (
+                      <Radio key={idx} value={opt} style={{ width: '100%' }}>
+                        <Card hoverable={!submitted} style={{ width: '100%' }}>
+                          {opt}
+                        </Card>
+                      </Radio>
+                    ))}
+                  </Space>
+                </Radio.Group>
+              )}
 
-        {currentQ.type === "single" && (
-          <Radio.Group 
-            onChange={(e) => setAnswer(e.target.value)} 
-            value={answer}
-            disabled={submitted}
-          >
-            <Space direction="vertical">
-              {currentQ.options?.map((opt, idx) => (
-                <Radio key={idx} value={opt}>{opt}</Radio>
-              ))}
-            </Space>
-          </Radio.Group>
-        )}
+              {currentQuestion.type === "multiple" && (
+                <Checkbox.Group
+                  onChange={setAnswer}
+                  value={answer}
+                  disabled={submitted}
+                  style={{ width: '100%', marginTop: '20px' }}
+                >
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    {currentQuestion.options?.map((opt, idx) => (
+                      <Checkbox key={idx} value={opt} style={{ width: '100%' }}>
+                        <Card hoverable={!submitted} style={{ width: '100%' }}>
+                          {opt}
+                        </Card>
+                      </Checkbox>
+                    ))}
+                  </Space>
+                </Checkbox.Group>
+              )}
+            </Card>
+          </Col>
 
-        {currentQ.type === "mcq" && (
-          <Checkbox.Group 
-            onChange={(values) => setAnswer(values)} 
-            value={answer}
-            disabled={submitted}
-          >
-            <Space direction="vertical">
-              {currentQ.options?.map((opt, idx) => (
-                <Checkbox key={idx} value={opt}>{opt}</Checkbox>
-              ))}
-            </Space>
-          </Checkbox.Group>
-        )}
-
-        {currentQ.type === "text" && (
-          <Input.TextArea 
-            rows={3} 
-            onChange={(e) => setAnswer(e.target.value)} 
-            value={answer}
-            disabled={submitted}
-            placeholder="Type your answer here..."
-          />
-        )}
-
-        <div style={{ marginTop: "1rem" }}>
-          <Progress 
-            percent={(timeLeft / (currentQ.timeLimit || 30)) * 100} 
-            status={timeLeft < 5 ? "exception" : "active"}
-            showInfo={false} 
-          />
-          <p>Time Left: {timeLeft}s</p>
-        </div>
-
-        <Button
-          type="primary"
-          onClick={handleSubmit}
-          disabled={submitted || !answer || (Array.isArray(answer) && answer.length === 0)}
-          loading={loading}
-          block
-          style={{ marginTop: "1rem" }}
-        >
-          Submit Answer
-        </Button>
+          <Col span={24} style={{ textAlign: 'center' }}>
+            <Button
+              type="primary"
+              size="large"
+              onClick={handleSubmit}
+              disabled={submitted || !answer}
+              loading={loading}
+            >
+              Submit Answer
+            </Button>
+          </Col>
+        </Row>
       </Card>
     </div>
   );

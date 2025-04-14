@@ -37,3 +37,47 @@
     }
   }
 }
+
+.quiz-container {
+  min-height: 100vh;
+  background: #f4f6f8;
+  padding: 40px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+
+  .quiz-card {
+    width: 800px;
+    max-width: 100%;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+
+    .ant-card-head {
+      border-bottom: 2px solid #f0f0f0;
+    }
+
+    .ant-radio-wrapper, .ant-checkbox-wrapper {
+      margin-bottom: 10px;
+    }
+
+    .ant-card-inner {
+      margin-bottom: 20px;
+    }
+
+    .ant-progress {
+      margin-bottom: 10px;
+    }
+
+    .ant-list {
+      margin-bottom: 20px;
+    }
+
+    .ant-card-hoverable {
+      transition: all 0.3s;
+      
+      &:hover {
+        transform: translateX(10px);
+        background: #f6f6f6;
+      }
+    }
+  }
+}

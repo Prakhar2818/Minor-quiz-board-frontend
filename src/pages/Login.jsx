@@ -13,10 +13,36 @@ const Login = () => {
     setLoading(true);
     try {
       const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/login`, values);
-      setAuth({ token: res.data.token, username: res.data.username });
+      
+      console.log("Login response:", res.data);
+
+      // If userId is not directly available in response, decode it from token
+      let userId = res.data.userId;
+      if (!userId && res.data.token) {
+        // Decode token to get userId
+        const tokenParts = res.data.token.split('.');
+        const payload = JSON.parse(atob(tokenParts[1]));
+        userId = payload.userId;
+      }
+
+      // Store auth data with userId
+      setAuth({
+        token: res.data.token,
+        username: res.data.username,
+        userId: userId // Now we ensure userId is set
+      });
+
+      // Store in localStorage if needed
+      localStorage.setItem('auth', JSON.stringify({
+        token: res.data.token,
+        username: res.data.username,
+        userId: userId
+      }));
+
       message.success("Login successful!");
       navigate("/home");
     } catch (error) {
+      console.error("Login error:", error);
       message.error(error.response?.data?.message || "Invalid credentials");
     } finally {
       setLoading(false);
