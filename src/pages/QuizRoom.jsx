@@ -42,7 +42,7 @@ const QuizRoom = () => {
         throw new Error("Quiz not found");
       }
 
-      // Set isCreator to true if the current username matches the quiz creator's name
+
       const isCreatorStatus = quizData.creatorName === auth.username;
       
       console.log("=== Quiz Data Debug ===");
@@ -54,7 +54,7 @@ const QuizRoom = () => {
       setQuiz(quizData);
       setQuestions(quizData.questions || []);
       setQuizStarted(quizData.status === 'active');
-      setIsCreator(isCreatorStatus); // This will set isCreator to true if names match
+      setIsCreator(isCreatorStatus); 
       
       if (quizData.participants) {
         setPlayers(quizData.participants);
@@ -73,7 +73,6 @@ const QuizRoom = () => {
     }
   };
 
-  // Call fetchQuizDetails when component mounts and when code or auth.userId changes
   useEffect(() => {
     if (!auth.userId) {
       message.error("Please login to join the quiz");
@@ -95,7 +94,7 @@ const QuizRoom = () => {
       code, 
       username: auth.username,
       userId: auth.userId,
-      creatorId: creatorId  // Use creatorId from state
+      // creatorId: creatorId 
     });
 
     socket.on("quiz-ended", () => {
@@ -418,7 +417,7 @@ const QuizRoom = () => {
             <Title level={3}>{quiz.title}</Title>
             <Space>
               <Tag color="blue">Score: {score}</Tag>
-              {isCreator && createdBy === quiz.createdBy && (
+              {isCreator && auth.userId === quiz.createdBy && (
                 <Button 
                   type="primary" 
                   danger
