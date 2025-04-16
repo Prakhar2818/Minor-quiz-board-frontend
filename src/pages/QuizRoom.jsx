@@ -94,12 +94,14 @@ const QuizRoom = () => {
       code, 
       username: auth.username,
       userId: auth.userId,
-      // creatorId: creatorId 
     });
 
-    socket.on("quiz-ended", () => {
+    // Handle quiz end event for all users
+    socket.on("quiz-ended", (data) => {
+      console.log("Quiz ended event received"); // Debug log
       setQuizEnded(true);
-      message.info("Quiz has ended!");
+      message.info("Quiz has ended! Redirecting to leaderboard...");
+      // Immediate redirect to leaderboard
       navigate(`/leaderboard/${code}`);
     });
 
@@ -138,7 +140,7 @@ const QuizRoom = () => {
       socket.off("quiz-started");
       socket.off("quiz-ended");
     };
-  }, [code, auth.username, auth.userId, creatorId, navigate]);
+  }, [code, auth.username, auth.userId, navigate]);
 
   const handleStart = async () => {
     // Check if current user is the creator
@@ -196,32 +198,32 @@ const QuizRoom = () => {
   };
 
   const handleEndQuiz = async () => {
-    // Validate creator status using the quiz data
-    if (!isCreator || auth.userId !== quiz.userId) {
+    if (!isCreator) {
       message.error("Only the quiz creator can end the quiz");
       return;
     }
 
     try {
+      // First emit the socket event to ensure all users get notified
+      socket.emit('end-quiz', { 
+        code,
+        createdBy: quiz.createdBy
+      });
+
+      // Then make the API call
       const response = await axios.post(`/api/quiz/${code}/end`, {
         code,
-        userId: auth.userId,
-        createdBy: quiz.createdBy  // Use the createdBy from quiz data
+        createdBy: quiz.createdBy
       });
 
       if (response.data.success) {
-        socket.emit('end-quiz', { 
-          code,
-          userId: auth.userId,
-          creatorBy: quiz.createdBy
-        });
         setQuizEnded(true);
         message.success("Quiz ended successfully");
-        navigate(`/leaderboard/${code}`);
+        // The navigation will happen through the socket event handler
       }
     } catch (error) {
       console.error("Failed to end quiz:", error);
-      message.error("Failed to end quiz");
+      message.error(error.response?.data?.error || "Failed to end quiz");
     }
   };
 
@@ -417,11 +419,13 @@ const QuizRoom = () => {
             <Title level={3}>{quiz.title}</Title>
             <Space>
               <Tag color="blue">Score: {score}</Tag>
-              {isCreator && auth.userId === quiz.createdBy && (
+              {/* Only show End Quiz button if isCreator is true */}
+              {isCreator && (
                 <Button 
                   type="primary" 
                   danger
                   onClick={handleEndQuiz}
+                  disabled={quiz.status === 'completed'}
                 >
                   End Quiz
                 </Button>
