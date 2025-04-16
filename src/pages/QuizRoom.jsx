@@ -96,13 +96,22 @@ const QuizRoom = () => {
       userId: auth.userId,
     });
 
-    // Handle quiz end event for all users
+    // Updated quiz-ended event handler to handle the new socket response
     socket.on("quiz-ended", (data) => {
-      console.log("Quiz ended event received"); // Debug log
+      console.log("Quiz ended event received", data); // Debug log
       setQuizEnded(true);
-      message.info("Quiz has ended! Redirecting to leaderboard...");
-      // Immediate redirect to leaderboard
-      navigate(`/leaderboard/${code}`);
+      
+      if (data.redirect) {
+        message.info("Quiz has ended! Redirecting to leaderboard...");
+        // Store final scores in localStorage for leaderboard
+        localStorage.setItem(`quiz_${code}_scores`, JSON.stringify(data.finalScores));
+        // Redirect to leaderboard
+        navigate(`/leaderboard/${code}`);
+      }
+    });
+
+    socket.on("quiz-error", (error) => {
+      message.error(error.message);
     });
 
     socket.on("player-joined", (data) => {
@@ -139,6 +148,7 @@ const QuizRoom = () => {
       socket.off("player-list");
       socket.off("quiz-started");
       socket.off("quiz-ended");
+      socket.off("quiz-error");
     };
   }, [code, auth.username, auth.userId, navigate]);
 
@@ -207,19 +217,19 @@ const QuizRoom = () => {
       // First emit the socket event to ensure all users get notified
       socket.emit('end-quiz', { 
         code,
-        createdBy: quiz.createdBy
+        createdBy: auth.userId // Changed to use userId instead of quiz.createdBy
       });
 
       // Then make the API call
       const response = await axios.post(`/api/quiz/${code}/end`, {
         code,
-        createdBy: quiz.createdBy
+        createdBy: auth.userId
       });
 
       if (response.data.success) {
         setQuizEnded(true);
         message.success("Quiz ended successfully");
-        // The navigation will happen through the socket event handler
+        // Navigation will happen through socket event handler
       }
     } catch (error) {
       console.error("Failed to end quiz:", error);
