@@ -105,8 +105,9 @@ const QuizRoom = () => {
       
       if (data.redirect) {
         message.info("Quiz has ended! Redirecting to leaderboard...");
-        // Store final scores in localStorage for leaderboard
-        localStorage.setItem(`quiz_${code}_scores`, JSON.stringify(data.finalScores));
+        // Store final score before redirecting
+        const finalScore = score;
+        localStorage.setItem(`quiz_${code}_final_score`, finalScore);
         // Redirect to leaderboard
         navigate(`/leaderboard/${code}`);
       }
@@ -216,26 +217,39 @@ const QuizRoom = () => {
     }
 
     try {
-      // First emit the socket event to ensure all users get notified
-      socket.emit('end-quiz', { 
-        code,
-        createdBy: auth.userId // Changed to use userId instead of quiz.createdBy
-      });
-
-      // Then make the API call
+      // First make the API call to end the quiz
       const response = await axios.post(`/api/quiz/${code}/end`, {
         code,
-        createdBy: auth.userId
+        createdBy: quiz.createdBy // Using the quiz's createdBy ID
       });
 
       if (response.data.success) {
+        // Emit socket event after successful API call
+        socket.emit('end-quiz', { 
+          code,
+          createdBy: quiz.createdBy,
+          finalScores: response.data.finalScores // Pass the final scores from API response
+        });
+
         setQuizEnded(true);
         message.success("Quiz ended successfully");
-        // Navigation will happen through socket event handler
+        
+        // Navigate to leaderboard
+        navigate(`/leaderboard/${code}`);
       }
     } catch (error) {
       console.error("Failed to end quiz:", error);
-      message.error(error.response?.data?.error || "Failed to end quiz");
+      
+      // Handle specific error cases
+      if (error.response?.status === 403) {
+        message.error("Only quiz creator can end the quiz");
+      } else if (error.response?.status === 400) {
+        message.error("Quiz is already completed");
+      } else if (error.response?.status === 404) {
+        message.error("Quiz not found");
+      } else {
+        message.error(error.response?.data?.error || "Failed to end quiz");
+      }
     }
   };
 
