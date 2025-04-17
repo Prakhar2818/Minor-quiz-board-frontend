@@ -55,6 +55,8 @@ const QuizRoom = () => {
       setQuestions(quizData.questions || []);
       setQuizStarted(quizData.status === 'active');
       setIsCreator(isCreatorStatus); 
+
+      console.log(quizData.participants);
       
       if (quizData.participants) {
         setPlayers(quizData.participants);

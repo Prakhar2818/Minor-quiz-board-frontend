@@ -43,12 +43,12 @@ const CreateQuiz = () => {
           type: q.type,
           options: q.options || [],
           correctAnswer: q.correctAnswer,
-          timeLimit: q.timeLimit || 30
+          timeLimit: q.timeLimit || 30,
         })),
         userId: auth.userId,
         createdBy: creatorId,
         creatorName: auth.username,
-        isCreator: true
+        isCreator: true,
       };
 
       const res = await axios.post(
@@ -135,232 +135,236 @@ const CreateQuiz = () => {
   };
 
   return (
-    <div className="auth-container">
-      <Card title="Create New Quiz" className="auth-card">
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleCreate}
-          initialValues={{
-            category: "technology", // Set default category
-          }}
-        >
-          <Form.Item
-            name="title"
-            label="Quiz Title"
-            rules={[{ required: true, message: "Please enter quiz title" }]}
+    <div className="">
+      <div className="auth-container">
+        <Card title="Create New Quiz" className="auth-card">
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleCreate}
+            initialValues={{
+              category: "technology", // Set default category
+            }}
           >
-            <Input placeholder="Enter quiz title" />
-          </Form.Item>
-
-          <Form.Item
-            name="category"
-            label="Category"
-            rules={[{ required: true, message: "Please select a category" }]}
-          >
-            <Select>
-              <Option value="technology">Technology</Option>
-              <Option value="science">Science</Option>
-              <Option value="college">College Subjects</Option>
-            </Select>
-          </Form.Item>
-
-          <div style={{ marginBottom: 16 }}>
-            <h3>Questions ({questions.length})</h3>
-            {questions.map((q, index) => (
-              <Card
-                key={index}
-                size="small"
-                style={{ marginBottom: 8 }}
-                extra={
-                  <Button
-                    type="text"
-                    danger
-                    icon={<DeleteOutlined />}
-                    onClick={() => removeQuestion(index)}
-                  />
-                }
-              >
-                <p>
-                  <strong>Question {index + 1}:</strong> {q.text}
-                </p>
-                <p>
-                  <strong>Type:</strong> {q.type}
-                </p>
-                {q.options.length > 0 && (
-                  <p>
-                    <strong>Options:</strong> {q.options.join(", ")}
-                  </p>
-                )}
-                <p>
-                  <strong>Correct Answer:</strong> {q.correctAnswer}
-                </p>
-              </Card>
-            ))}
-            <Button
-              type="dashed"
-              onClick={showQuestionModal}
-              block
-              icon={<PlusOutlined />}
-            >
-              Add Question
-            </Button>
-          </div>
-
-          <Button
-            type="primary"
-            htmlType="submit"
-            block
-            loading={loading}
-            disabled={questions.length === 0}
-          >
-            Create Quiz
-          </Button>
-        </Form>
-
-        <Modal
-          title="Add Question"
-          open={isModalVisible}
-          onOk={handleQuestionSubmit}
-          onCancel={() => setIsModalVisible(false)}
-          width={600}
-        >
-          <Form form={questionForm} layout="vertical">
             <Form.Item
-              name="questionText"
-              label="Question Text"
-              rules={[{ required: true, message: "Please enter the question" }]}
+              name="title"
+              label="Quiz Title"
+              rules={[{ required: true, message: "Please enter quiz title" }]}
             >
-              <TextArea rows={3} placeholder="Enter your question here" />
+              <Input placeholder="Enter quiz title" />
             </Form.Item>
 
             <Form.Item
-              name="type"
-              label="Question Type"
-              rules={[{ required: true }]}
-              initialValue="single"
+              name="category"
+              label="Category"
+              rules={[{ required: true, message: "Please select a category" }]}
             >
-              <Select onChange={handleQuestionTypeChange}>
-                <Option value="single">Single Choice</Option>
-                <Option value="mcq">Multiple Choice</Option>
-                <Option value="text">Text Answer</Option>
+              <Select>
+                <Option value="technology">Technology</Option>
+                <Option value="science">Science</Option>
+                <Option value="college">College Subjects</Option>
               </Select>
             </Form.Item>
 
-            <Form.Item
-              noStyle
-              shouldUpdate={(prevValues, currentValues) =>
-                prevValues.type !== currentValues.type
-              }
+            <div style={{ marginBottom: 16 }}>
+              <h3>Questions ({questions.length})</h3>
+              {questions.map((q, index) => (
+                <Card
+                  key={index}
+                  size="small"
+                  style={{ marginBottom: 8 }}
+                  extra={
+                    <Button
+                      type="text"
+                      danger
+                      icon={<DeleteOutlined />}
+                      onClick={() => removeQuestion(index)}
+                    />
+                  }
+                >
+                  <p>
+                    <strong>Question {index + 1}:</strong> {q.text}
+                  </p>
+                  <p>
+                    <strong>Type:</strong> {q.type}
+                  </p>
+                  {q.options.length > 0 && (
+                    <p>
+                      <strong>Options:</strong> {q.options.join(", ")}
+                    </p>
+                  )}
+                  <p>
+                    <strong>Correct Answer:</strong> {q.correctAnswer}
+                  </p>
+                </Card>
+              ))}
+              <Button
+                type="dashed"
+                onClick={showQuestionModal}
+                block
+                icon={<PlusOutlined />}
+              >
+                Add Question
+              </Button>
+            </div>
+
+            <Button
+              type="primary"
+              htmlType="submit"
+              block
+              loading={loading}
+              disabled={questions.length === 0}
             >
-              {({ getFieldValue }) => {
-                const type = getFieldValue("type");
-                if (type === "text") {
-                  return (
-                    <Form.Item
-                      name="correctAnswer"
-                      label="Correct Answer"
-                      rules={[
-                        {
-                          required: true,
-                          message: "Please enter the correct answer",
-                        },
-                      ]}
-                    >
-                      <Input placeholder="Enter the correct answer" />
-                    </Form.Item>
-                  );
-                }
-                return (
-                  <>
-                    <Form.List
-                      name="options"
-                      initialValue={["", ""]}
-                      rules={[
-                        {
-                          validator: async (_, options) => {
-                            if (
-                              !options ||
-                              options.filter((opt) => opt.trim() !== "")
-                                .length < 2
-                            ) {
-                              throw new Error(
-                                "At least 2 options are required"
-                              );
-                            }
-                          },
-                        },
-                      ]}
-                    >
-                      {(fields, { add, remove }) => (
-                        <>
-                          {fields.map((field, index) => (
-                            <Form.Item
-                              key={field.key}
-                              label={index === 0 ? "Options" : ""}
-                              required={false}
-                            >
-                              <Space>
-                                <Form.Item
-                                  name={field.name}
-                                  validateTrigger={["onChange", "onBlur"]}
-                                  rules={[
-                                    {
-                                      required: true,
-                                      whitespace: true,
-                                      message:
-                                        "Please input option's content or delete this field.",
-                                    },
-                                  ]}
-                                  noStyle
-                                >
-                                  <Input
-                                    placeholder={`Option ${index + 1}`}
-                                    style={{ width: "300px" }}
-                                  />
-                                </Form.Item>
-                                {fields.length > 2 && (
-                                  <DeleteOutlined
-                                    onClick={() => remove(field.name)}
-                                  />
-                                )}
-                              </Space>
-                            </Form.Item>
-                          ))}
-                          {fields.length < 6 && (
-                            <Form.Item>
-                              <Button
-                                type="dashed"
-                                onClick={() => add()}
-                                icon={<PlusOutlined />}
-                                block
-                              >
-                                Add Option
-                              </Button>
-                            </Form.Item>
-                          )}
-                        </>
-                      )}
-                    </Form.List>
-                    <Form.Item
-                      name="correctAnswer"
-                      label="Correct Answer"
-                      rules={[
-                        {
-                          required: true,
-                          message: "Please enter the correct answer",
-                        },
-                      ]}
-                    >
-                      <Input placeholder="Enter the correct option exactly as written above" />
-                    </Form.Item>
-                  </>
-                );
-              }}
-            </Form.Item>
+              Create Quiz
+            </Button>
           </Form>
-        </Modal>
-      </Card>
+
+          <Modal
+            title="Add Question"
+            open={isModalVisible}
+            onOk={handleQuestionSubmit}
+            onCancel={() => setIsModalVisible(false)}
+            width={600}
+          >
+            <Form form={questionForm} layout="vertical">
+              <Form.Item
+                name="questionText"
+                label="Question Text"
+                rules={[
+                  { required: true, message: "Please enter the question" },
+                ]}
+              >
+                <TextArea rows={3} placeholder="Enter your question here" />
+              </Form.Item>
+
+              <Form.Item
+                name="type"
+                label="Question Type"
+                rules={[{ required: true }]}
+                initialValue="single"
+              >
+                <Select onChange={handleQuestionTypeChange}>
+                  <Option value="single">Single Choice</Option>
+                  <Option value="mcq">Multiple Choice</Option>
+                  <Option value="text">Text Answer</Option>
+                </Select>
+              </Form.Item>
+
+              <Form.Item
+                noStyle
+                shouldUpdate={(prevValues, currentValues) =>
+                  prevValues.type !== currentValues.type
+                }
+              >
+                {({ getFieldValue }) => {
+                  const type = getFieldValue("type");
+                  if (type === "text") {
+                    return (
+                      <Form.Item
+                        name="correctAnswer"
+                        label="Correct Answer"
+                        rules={[
+                          {
+                            required: true,
+                            message: "Please enter the correct answer",
+                          },
+                        ]}
+                      >
+                        <Input placeholder="Enter the correct answer" />
+                      </Form.Item>
+                    );
+                  }
+                  return (
+                    <>
+                      <Form.List
+                        name="options"
+                        initialValue={["", ""]}
+                        rules={[
+                          {
+                            validator: async (_, options) => {
+                              if (
+                                !options ||
+                                options.filter((opt) => opt.trim() !== "")
+                                  .length < 2
+                              ) {
+                                throw new Error(
+                                  "At least 2 options are required"
+                                );
+                              }
+                            },
+                          },
+                        ]}
+                      >
+                        {(fields, { add, remove }) => (
+                          <>
+                            {fields.map((field, index) => (
+                              <Form.Item
+                                key={field.key}
+                                label={index === 0 ? "Options" : ""}
+                                required={false}
+                              >
+                                <Space>
+                                  <Form.Item
+                                    name={field.name}
+                                    validateTrigger={["onChange", "onBlur"]}
+                                    rules={[
+                                      {
+                                        required: true,
+                                        whitespace: true,
+                                        message:
+                                          "Please input option's content or delete this field.",
+                                      },
+                                    ]}
+                                    noStyle
+                                  >
+                                    <Input
+                                      placeholder={`Option ${index + 1}`}
+                                      style={{ width: "300px" }}
+                                    />
+                                  </Form.Item>
+                                  {fields.length > 2 && (
+                                    <DeleteOutlined
+                                      onClick={() => remove(field.name)}
+                                    />
+                                  )}
+                                </Space>
+                              </Form.Item>
+                            ))}
+                            {fields.length < 6 && (
+                              <Form.Item>
+                                <Button
+                                  type="dashed"
+                                  onClick={() => add()}
+                                  icon={<PlusOutlined />}
+                                  block
+                                >
+                                  Add Option
+                                </Button>
+                              </Form.Item>
+                            )}
+                          </>
+                        )}
+                      </Form.List>
+                      <Form.Item
+                        name="correctAnswer"
+                        label="Correct Answer"
+                        rules={[
+                          {
+                            required: true,
+                            message: "Please enter the correct answer",
+                          },
+                        ]}
+                      >
+                        <Input placeholder="Enter the correct option exactly as written above" />
+                      </Form.Item>
+                    </>
+                  );
+                }}
+              </Form.Item>
+            </Form>
+          </Modal>
+        </Card>
+      </div>
     </div>
   );
 };
