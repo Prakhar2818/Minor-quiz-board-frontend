@@ -197,6 +197,43 @@ const QuizRoom = () => {
 
       setSubmitted(true);
 
+      if (response.data.success) {
+        // Update the score with the currentScore from backend
+        setScore(response.data.currentScore);
+
+        if (response.data.correct) {
+          message.success(`Correct! You earned ${response.data.points} points!`);
+        } else {
+          message.error(`Incorrect. The correct answer was: ${response.data.correctAnswer}`);
+        }
+
+        // Move to next question or end quiz
+        if (questionIndex < questions.length - 1) {
+          setTimeout(() => {
+            setQuestionIndex(prev => prev + 1);
+            setAnswer("");
+            setSubmitted(false);
+            setTimeLeft(questions[questionIndex + 1]?.timeLimit || 30);
+          }, 2000);
+        } else {
+          message.info("Quiz completed! Redirecting to leaderboard...");
+          // Store final score before redirecting
+          localStorage.setItem(`quiz_${code}_final_score`, response.data.currentScore);
+          
+          // Emit completion event with final score
+          socket.emit('player-completed', {
+            code,
+            userId: auth.userId,
+            username: auth.username,
+            finalScore: response.data.currentScore
+          });
+
+          setQuizEnded(true);
+          setTimeout(() => {
+            navigate(`/leaderboard/${code}`);
+          }, 2000);
+        }
+      }
       if (response.data.correct) {
         setScore(prev => prev + 1);
         message.success('Correct answer!');

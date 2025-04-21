@@ -1,30 +1,35 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../utils/axios";
-import { Table, Card, Button, message, Typography, Tag, Result } from "antd";
+import { Table, Card, Button, message, Typography, Tag, Result, Space, Statistic, Row, Col } from "antd";
+import { AuthContext } from "../config/AuthContext";
 
 const { Title } = Typography;
 
 const Leaderboard = () => {
   const { code } = useParams();
   const [leaderboardData, setLeaderboardData] = useState({
+    quiz: {},
     leaderboard: [],
-    quizTitle: "",
-    quizStatus: ""
+    submissionHistory: [],
+    metadata: {}
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const { auth } = useContext(AuthContext);
 
   useEffect(() => {
     const fetchScores = async () => {
       try {
         const res = await axios.get(`/api/quiz/leaderboard/${code}`);
+        
         if (res.data.success) {
           setLeaderboardData({
-            leaderboard: res.data.leaderboard, // Backend already provides sorted and ranked data
-            quizTitle: res.data.quizTitle,
-            quizStatus: res.data.quizStatus
+            quiz: res.data.quiz,
+            leaderboard: res.data.leaderboard,
+            submissionHistory: res.data.submissionHistory,
+            metadata: res.data.metadata
           });
           setError(null);
         } else {
@@ -38,6 +43,7 @@ const Leaderboard = () => {
         setLoading(false);
       }
     };
+
     fetchScores();
   }, [code]);
 
@@ -46,7 +52,7 @@ const Leaderboard = () => {
       title: "Rank", 
       dataIndex: "rank", 
       key: "rank",
-      width: '20%',
+      width: '15%',
       render: (rank) => (
         <Tag color={rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : 'default'}>
           #{rank}
@@ -57,15 +63,32 @@ const Leaderboard = () => {
       title: "Player", 
       dataIndex: "username",
       key: "username",
-      width: '50%'
+      width: '35%',
+      render: (username, record) => (
+        <Space>
+          {username}
+          {record.userId === auth.userId && <Tag color="green">You</Tag>}
+        </Space>
+      )
     },
     { 
       title: "Score", 
       dataIndex: "score", 
       key: "score",
-      width: '30%',
+      width: '25%',
       render: (score) => (
         <Tag color="blue">{score} points</Tag>
+      )
+    },
+    {
+      title: "Percentage",
+      dataIndex: "percentage",
+      key: "percentage",
+      width: '25%',
+      render: (percentage) => (
+        <Tag color={percentage >= 70 ? 'green' : percentage >= 40 ? 'orange' : 'red'}>
+          {percentage}%
+        </Tag>
       )
     }
   ];
@@ -104,18 +127,45 @@ const Leaderboard = () => {
       <Card 
         title={
           <div>
-            <Title level={3}>{leaderboardData.quizTitle || 'Quiz Leaderboard'}</Title>
-            <Title level={5}>Quiz Code: <Tag color="cyan">{code}</Tag></Title>
-            {leaderboardData.quizStatus && (
-              <Tag color={leaderboardData.quizStatus === 'completed' ? 'green' : 'blue'}>
-                {leaderboardData.quizStatus.charAt(0).toUpperCase() + leaderboardData.quizStatus.slice(1)}
-              </Tag>
-            )}
+            <Title level={3}>{leaderboardData.quiz.title || 'Quiz Leaderboard'}</Title>
+            <Title level={5}>
+              Quiz Code: <Tag color="cyan">{code}</Tag>
+              {leaderboardData.quiz.category && (
+                <Tag color="purple" style={{ marginLeft: 8 }}>{leaderboardData.quiz.category}</Tag>
+              )}
+            </Title>
+            <Tag color={leaderboardData.quiz.status === 'completed' ? 'green' : 'blue'}>
+              {leaderboardData.quiz.status?.charAt(0).toUpperCase() + leaderboardData.quiz.status?.slice(1)}
+            </Tag>
           </div>
         } 
         className="auth-card"
       >
-        {leaderboardData.leaderboard.length > 0 ? (
+        <Row gutter={16} style={{ marginBottom: 24 }}>
+          <Col span={8}>
+            <Statistic 
+              title="Average Score" 
+              value={Math.round(leaderboardData.metadata.averageScore * 10) / 10}
+              suffix="points"
+            />
+          </Col>
+          <Col span={8}>
+            <Statistic 
+              title="Highest Score" 
+              value={leaderboardData.metadata.highestScore}
+              suffix="points"
+              valueStyle={{ color: '#3f8600' }}
+            />
+          </Col>
+          <Col span={8}>
+            <Statistic 
+              title="Total Participants" 
+              value={leaderboardData.quiz.totalParticipants || 0}
+            />
+          </Col>
+        </Row>
+
+        {leaderboardData.leaderboard?.length > 0 ? (
           <Table 
             dataSource={leaderboardData.leaderboard} 
             columns={columns} 
@@ -131,6 +181,7 @@ const Leaderboard = () => {
             subTitle="The leaderboard is currently empty. Please wait for the quiz to complete."
           />
         )}
+        
         <div style={{ marginTop: "20px", textAlign: "center" }}>
           <Button 
             type="primary" 
