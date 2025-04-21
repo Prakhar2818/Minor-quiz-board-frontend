@@ -466,7 +466,6 @@ const QuizRoom = () => {
           <Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
             <Title level={3}>{quiz.title}</Title>
             <Space>
-              <Tag color="blue">Score: {score}</Tag>
               {/* Only show End Quiz button if isCreator is true */}
               {isCreator && (
                 <Button 
