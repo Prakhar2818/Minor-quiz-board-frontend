@@ -98,19 +98,17 @@ const QuizRoom = () => {
       userId: auth.userId,
     });
 
-    // Updated quiz-ended event handler to handle the new socket response
     socket.on("quiz-ended", (data) => {
-      console.log("Quiz ended event received", data); // Debug log
+      console.log("Quiz ended event received", data);
       setQuizEnded(true);
       
-      if (data.redirect) {
-        message.info("Quiz has ended! Redirecting to leaderboard...");
-        // Store final score before redirecting
-        const finalScore = score;
-        localStorage.setItem(`quiz_${code}_final_score`, finalScore);
-        // Redirect to leaderboard
+      // Store final score before redirecting
+      localStorage.setItem(`quiz_${code}_final_score`, score);
+      
+      message.info("Quiz has been ended by the host. Redirecting to leaderboard...");
+      setTimeout(() => {
         navigate(`/leaderboard/${code}`);
-      }
+      }, 1500);
     });
 
     socket.on("quiz-error", (error) => {
@@ -153,7 +151,7 @@ const QuizRoom = () => {
       socket.off("quiz-ended");
       socket.off("quiz-error");
     };
-  }, [code, auth.username, auth.userId, navigate]);
+  }, [code, auth.username, auth.userId, navigate, score]);
 
   const handleStart = async () => {
     // Check if current user is the creator
@@ -207,7 +205,7 @@ const QuizRoom = () => {
           message.error(`Incorrect. The correct answer was: ${response.data.correctAnswer}`);
         }
 
-        // Move to next question or end quiz
+        // Move to next question if available
         if (questionIndex < questions.length - 1) {
           setTimeout(() => {
             setQuestionIndex(prev => prev + 1);
@@ -216,29 +214,17 @@ const QuizRoom = () => {
             setTimeLeft(questions[questionIndex + 1]?.timeLimit || 30);
           }, 2000);
         } else {
-          message.info("Quiz completed! Redirecting to leaderboard...");
-          // Store final score before redirecting
-          localStorage.setItem(`quiz_${code}_final_score`, response.data.currentScore);
+          // Player has completed all questions
+          message.info("You've completed all questions! Waiting for the host to end the quiz...");
           
-          // Emit completion event with final score
+          // Notify server about completion
           socket.emit('player-completed', {
             code,
             userId: auth.userId,
             username: auth.username,
             finalScore: response.data.currentScore
           });
-
-          setQuizEnded(true);
-          setTimeout(() => {
-            navigate(`/leaderboard/${code}`);
-          }, 2000);
         }
-      }
-      if (response.data.correct) {
-        setScore(prev => prev + 1);
-        message.success('Correct answer!');
-      } else {
-        message.error(`Incorrect. The correct answer was: ${response.data.correctAnswer}`);
       }
     } catch (error) {
       message.error('Failed to submit answer');
@@ -271,7 +257,6 @@ const QuizRoom = () => {
         setQuizEnded(true);
         message.success("Quiz ended successfully");
         
-        // Navigate to leaderboard
         navigate(`/leaderboard/${code}`);
       }
     } catch (error) {
