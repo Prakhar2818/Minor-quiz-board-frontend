@@ -4,7 +4,6 @@ export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [auth, setAuth] = useState(() => {
-    // Initialize auth state from localStorage if available
     const savedAuth = localStorage.getItem('auth');
     return savedAuth ? JSON.parse(savedAuth) : {
       token: null,
@@ -12,8 +11,7 @@ export const AuthProvider = ({ children }) => {
       userId: null
     };
   });
-
-  // Update localStorage whenever auth changes
+  
   useEffect(() => {
     if (auth.token) {
       localStorage.setItem('auth', JSON.stringify(auth));

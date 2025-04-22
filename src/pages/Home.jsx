@@ -1,13 +1,30 @@
-import React from "react";
+import React, { useContext } from "react";
 import { Button, Card } from "antd";
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../config/AuthContext";
 
 const Home = () => {
   const navigate = useNavigate();
+  const { setAuth } = useContext(AuthContext);
+  const handleLogout = () => {
+    setAuth({
+      token: null,
+      username: null,
+      userId: null,
+    });
+    localStorage.removeItem("auth");
+    navigate("/");
+  };
 
   return (
     <div className="home-container">
-      <h2>Welcome to Quiz Board</h2>
+      <h2>Welcome to QuizzyPop</h2>
+      <div className="mb-5">
+        <Button className="text-white bg-danger" onClick={handleLogout}>
+          Logout
+        </Button>
+      </div>
+
       <div className="home-options">
         <div className="row g-4">
           <div className="col-md-6">
