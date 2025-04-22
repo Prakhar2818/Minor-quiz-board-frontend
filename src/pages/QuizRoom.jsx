@@ -1,14 +1,28 @@
 import React, { useEffect, useState, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { 
-  Button, Card, Radio, Checkbox, Input, Progress, Space, 
-  Alert, Avatar, List, Result, message, Spin, Typography,
-  Row, Col, Tag
-} from 'antd';
+import {
+  Button,
+  Card,
+  Radio,
+  Checkbox,
+  Input,
+  Progress,
+  Space,
+  Alert,
+  Avatar,
+  List,
+  Result,
+  message,
+  Spin,
+  Typography,
+  Row,
+  Col,
+  Tag,
+} from "antd";
 import { AuthContext } from "../config/AuthContext";
 import socket from "../socket";
 import axios from "../utils/axios";
-import { PlayCircleOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined } from "@ant-design/icons";
 
 const { Title } = Typography;
 
@@ -16,12 +30,12 @@ const QuizRoom = () => {
   const { code } = useParams();
   const navigate = useNavigate();
   const { auth } = useContext(AuthContext);
-  
+
   const [quiz, setQuiz] = useState({ createdBy: null });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isCreator, setIsCreator] = useState(false);
-  const [creatorId, setCreatorId] = useState(null);  // This will store the creator's ID
+  const [creatorId, setCreatorId] = useState(null); // This will store the creator's ID
   const [players, setPlayers] = useState([]);
   const [quizStarted, setQuizStarted] = useState(false);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -35,35 +49,36 @@ const QuizRoom = () => {
   const fetchQuizDetails = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/quiz/${code}`);
+      const response = await axios.get(
+        `${import.meta.env.VITE_API_URL}/api/quiz/${code}`
+      );
       const quizData = response.data;
-      
+
       if (!quizData) {
         throw new Error("Quiz not found");
       }
 
-
       const isCreatorStatus = quizData.creatorName === auth.username;
-      
+
       console.log("=== Quiz Data Debug ===");
       console.log("Quiz Data:", quizData);
       console.log("Current username:", auth.username);
       console.log("Quiz creatorName:", quizData.creatorName);
       console.log("Is creator?", isCreatorStatus);
-      
+
       setQuiz(quizData);
       setQuestions(quizData.questions || []);
-      setQuizStarted(quizData.status === 'active');
-      setIsCreator(isCreatorStatus); 
+      setQuizStarted(quizData.status === "active");
+      setIsCreator(isCreatorStatus);
 
       console.log(quizData.participants);
-      
+
       if (quizData.participants) {
         setPlayers(quizData.participants);
       }
-      
+
       console.log("Creator status set to:", isCreatorStatus);
-      
+
       setError(null);
     } catch (error) {
       console.error("Failed to fetch quiz details:", error);
@@ -78,10 +93,10 @@ const QuizRoom = () => {
   useEffect(() => {
     if (!auth.userId) {
       message.error("Please login to join the quiz");
-      navigate('/login');
+      navigate("/login");
       return;
     }
-    
+
     if (code) {
       fetchQuizDetails();
     }
@@ -92,8 +107,8 @@ const QuizRoom = () => {
       socket.connect();
     }
 
-    socket.emit("join-room", { 
-      code, 
+    socket.emit("join-room", {
+      code,
       username: auth.username,
       userId: auth.userId,
     });
@@ -101,11 +116,13 @@ const QuizRoom = () => {
     socket.on("quiz-ended", (data) => {
       console.log("Quiz ended event received", data);
       setQuizEnded(true);
-      
+
       // Store final score before redirecting
       localStorage.setItem(`quiz_${code}_final_score`, score);
-      
-      message.info("Quiz has been ended by the host. Redirecting to leaderboard...");
+
+      message.info(
+        "Quiz has been ended by the host. Redirecting to leaderboard..."
+      );
       setTimeout(() => {
         navigate(`/leaderboard/${code}`);
       }, 1500);
@@ -116,8 +133,10 @@ const QuizRoom = () => {
     });
 
     socket.on("player-joined", (data) => {
-      setPlayers(currentPlayers => {
-        const playerExists = currentPlayers.some(p => p.userId === data.userId);
+      setPlayers((currentPlayers) => {
+        const playerExists = currentPlayers.some(
+          (p) => p.userId === data.userId
+        );
         if (!playerExists) {
           return [...currentPlayers, data];
         }
@@ -140,10 +159,10 @@ const QuizRoom = () => {
     });
 
     return () => {
-      socket.emit("leave-room", { 
-        code, 
-        username: auth.username, 
-        userId: auth.userId
+      socket.emit("leave-room", {
+        code,
+        username: auth.username,
+        userId: auth.userId,
       });
       socket.off("player-joined");
       socket.off("player-list");
@@ -163,18 +182,18 @@ const QuizRoom = () => {
     try {
       const response = await axios.post(`/api/quiz/start`, {
         code,
-        creatorName: auth.username
+        creatorName: auth.username,
       });
 
       if (response.data.success) {
-        socket.emit('start-quiz', { code });
+        socket.emit("start-quiz", { code });
         setQuizStarted(true);
         setQuestions(response.data.questions);
         message.success("Quiz started successfully!");
       }
     } catch (error) {
       console.error("Failed to start quiz:", error);
-      message.error(error.response?.data?.error || 'Failed to start quiz');
+      message.error(error.response?.data?.error || "Failed to start quiz");
     }
   };
 
@@ -190,7 +209,7 @@ const QuizRoom = () => {
         code,
         userId: auth.userId,
         questionIndex,
-        answer: Array.isArray(answer) ? answer.sort().join(',') : answer
+        answer: Array.isArray(answer) ? answer.sort().join(",") : answer,
       });
 
       setSubmitted(true);
@@ -200,34 +219,40 @@ const QuizRoom = () => {
         setScore(response.data.currentScore);
 
         if (response.data.correct) {
-          message.success(`Correct! You earned ${response.data.points} points!`);
+          message.success(
+            `Correct! You earned ${response.data.points} points!`
+          );
         } else {
-          message.error(`Incorrect. The correct answer was: ${response.data.correctAnswer}`);
+          message.error(
+            `Incorrect. The correct answer was: ${response.data.correctAnswer}`
+          );
         }
 
         // Move to next question if available
         if (questionIndex < questions.length - 1) {
           setTimeout(() => {
-            setQuestionIndex(prev => prev + 1);
+            setQuestionIndex((prev) => prev + 1);
             setAnswer("");
             setSubmitted(false);
             setTimeLeft(questions[questionIndex + 1]?.timeLimit || 30);
           }, 2000);
         } else {
           // Player has completed all questions
-          message.info("You've completed all questions! Waiting for the host to end the quiz...");
-          
+          message.info(
+            "You've completed all questions! Waiting for the host to end the quiz..."
+          );
+
           // Notify server about completion
-          socket.emit('player-completed', {
+          socket.emit("player-completed", {
             code,
             userId: auth.userId,
             username: auth.username,
-            finalScore: response.data.currentScore
+            finalScore: response.data.currentScore,
           });
         }
       }
     } catch (error) {
-      message.error('Failed to submit answer');
+      message.error("Failed to submit answer");
     } finally {
       setLoading(false);
     }
@@ -243,25 +268,23 @@ const QuizRoom = () => {
       // First make the API call to end the quiz
       const response = await axios.post(`/api/quiz/${code}/end`, {
         code,
-        createdBy: quiz.createdBy // Using the quiz's createdBy ID
+        createdBy: quiz.createdBy, // Using the quiz's createdBy ID
       });
 
       if (response.data.success) {
         // Emit socket event after successful API call
-        socket.emit('end-quiz', { 
+        socket.emit("end-quiz", {
           code,
           createdBy: quiz.createdBy,
-          finalScores: response.data.finalScores // Pass the final scores from API response
+          finalScores: response.data.finalScores, // Pass the final scores from API response
         });
 
         setQuizEnded(true);
         message.success("Quiz ended successfully");
-        
-        navigate(`/leaderboard/${code}`);
       }
     } catch (error) {
       console.error("Failed to end quiz:", error);
-      
+
       // Handle specific error cases
       if (error.response?.status === 403) {
         message.error("Only quiz creator can end the quiz");
@@ -273,6 +296,7 @@ const QuizRoom = () => {
         message.error(error.response?.data?.error || "Failed to end quiz");
       }
     }
+    navigate(`/leaderboard/${code}`);
   };
 
   const currentQuestion = questions[questionIndex] || {};
@@ -281,9 +305,11 @@ const QuizRoom = () => {
     return (
       <div className="quiz-container">
         <Card className="quiz-card">
-          <div style={{ textAlign: 'center', padding: '40px' }}>
+          <div style={{ textAlign: "center", padding: "40px" }}>
             <Spin size="large" />
-            <Title level={4} style={{ marginTop: '20px' }}>Loading Quiz...</Title>
+            <Title level={4} style={{ marginTop: "20px" }}>
+              Loading Quiz...
+            </Title>
           </div>
         </Card>
       </div>
@@ -299,9 +325,13 @@ const QuizRoom = () => {
             title="Failed to load quiz"
             subTitle={error}
             extra={[
-              <Button type="primary" key="home" onClick={() => navigate('/home')}>
+              <Button
+                type="primary"
+                key="home"
+                onClick={() => navigate("/home")}
+              >
                 Back Home
-              </Button>
+              </Button>,
             ]}
           />
         </Card>
@@ -318,9 +348,13 @@ const QuizRoom = () => {
             title="Quiz Not Found"
             subTitle="The quiz you're looking for doesn't exist."
             extra={[
-              <Button type="primary" key="home" onClick={() => navigate('/home')}>
+              <Button
+                type="primary"
+                key="home"
+                onClick={() => navigate("/home")}
+              >
                 Back Home
-              </Button>
+              </Button>,
             ]}
           />
         </Card>
@@ -335,17 +369,17 @@ const QuizRoom = () => {
     }
 
     return (
-      <div style={{ marginTop: '20px' }}>
+      <div style={{ marginTop: "20px" }}>
         <Alert
           message="Host Controls"
           description={
-            players.length < 2 
+            players.length < 2
               ? "Please wait for at least 2 players to join before starting the quiz."
               : "You can now start the quiz. All players are ready!"
           }
           type={players.length < 2 ? "warning" : "success"}
           showIcon
-          style={{ marginBottom: '20px' }}
+          style={{ marginBottom: "20px" }}
         />
         <Button
           type="primary"
@@ -353,14 +387,14 @@ const QuizRoom = () => {
           block
           onClick={handleStart}
           disabled={players.length < 2}
-          style={{ 
-            height: '50px',
-            fontSize: '18px',
-            backgroundColor: players.length < 2 ? '#d9d9d9' : '#1890ff',
+          style={{
+            height: "50px",
+            fontSize: "18px",
+            backgroundColor: players.length < 2 ? "#d9d9d9" : "#1890ff",
           }}
           icon={<PlayCircleOutlined />}
         >
-          {players.length < 2 ? 'Waiting for Players...' : 'Start Quiz Now'}
+          {players.length < 2 ? "Waiting for Players..." : "Start Quiz Now"}
         </Button>
       </div>
     );
@@ -369,14 +403,14 @@ const QuizRoom = () => {
   if (!quizStarted) {
     return (
       <div className="quiz-container">
-        <Card 
+        <Card
           title={
             <Space>
-              <Title level={3}>{quiz.title || 'Quiz Lobby'}</Title>
+              <Title level={3}>{quiz.title || "Quiz Lobby"}</Title>
               <Tag color="blue">Code: {code}</Tag>
-              {auth.userId === quiz.createdBy && 
+              {auth.userId === quiz.createdBy && (
                 <Tag color="gold">You are the host</Tag>
-              }
+              )}
             </Space>
           }
           className="quiz-card"
@@ -384,7 +418,7 @@ const QuizRoom = () => {
             <Space>
               <Tag color="cyan">Created by: {quiz.creatorName}</Tag>
               <Avatar.Group maxCount={2}>
-                {players.map(player => (
+                {players.map((player) => (
                   <Avatar key={player.userId}>
                     {player.username?.[0]?.toUpperCase()}
                   </Avatar>
@@ -394,46 +428,53 @@ const QuizRoom = () => {
             </Space>
           }
         >
-          {renderCreatorControls()}
-          
-          <List
-            header={<Title level={4}>Players in Lobby</Title>}
-            bordered
-            dataSource={players}
-            renderItem={(player) => (
-              <List.Item>
-                <List.Item.Meta
-                  avatar={
-                    <Avatar style={{ 
-                      backgroundColor: player.userId === quiz.createdBy ? '#f56a00' : '#1890ff' 
-                    }}>
-                      {player.username?.[0]?.toUpperCase()}
-                    </Avatar>
-                  }
-                  title={
-                    <Space>
-                      {player.username}
-                      {player.userId === auth.userId && 
-                        <Tag color="green">You</Tag>
+          <div className="quiz-lobby">
+            {renderCreatorControls()}
+
+            <div className="players-list">
+              <Title level={4}>Players in Lobby</Title>
+              <List
+                dataSource={players}
+                renderItem={(player) => (
+                  <List.Item>
+                    <List.Item.Meta
+                      avatar={
+                        <Avatar
+                          style={{
+                            backgroundColor:
+                              player.userId === quiz.createdBy
+                                ? "#f56a00"
+                                : "#1890ff",
+                          }}
+                        >
+                          {player.username?.[0]?.toUpperCase()}
+                        </Avatar>
                       }
-                      {player.userId === quiz.createdBy && 
-                        <Tag color="orange">Host</Tag>
+                      title={
+                        <Space>
+                          {player.username}
+                          {player.userId === auth.userId && (
+                            <Tag color="green">You</Tag>
+                          )}
+                          {player.userId === quiz.createdBy && (
+                            <Tag color="orange">Host</Tag>
+                          )}
+                        </Space>
                       }
-                    </Space>
-                  }
-                />
-              </List.Item>
+                    />
+                  </List.Item>
+                )}
+              />
+            </div>
+
+            {(!isCreator || auth.userId !== quiz.createdBy) && (
+              <Alert
+                message="Waiting for host to start the quiz..."
+                type="info"
+                showIcon
+              />
             )}
-          />
-          
-          {(!isCreator || auth.userId !== quiz.createdBy) && (
-            <Alert
-              message="Waiting for host to start the quiz..."
-              type="info"
-              showIcon
-              style={{ marginTop: '20px' }}
-            />
-          )}
+          </div>
         </Card>
       </div>
     );
@@ -448,9 +489,13 @@ const QuizRoom = () => {
             title="Quiz Completed!"
             subTitle={`Your final score: ${score} out of ${questions.length}`}
             extra={[
-              <Button type="primary" key="home" onClick={() => navigate('/home')}>
+              <Button
+                type="primary"
+                key="home"
+                onClick={() => navigate("/home")}
+              >
                 Back to Home
-              </Button>
+              </Button>,
             ]}
           />
         </Card>
@@ -463,16 +508,19 @@ const QuizRoom = () => {
       <Card
         className="quiz-card"
         title={
-          <Space align="center" style={{ width: '100%', justifyContent: 'space-between' }}>
+          <Space
+            align="center"
+            style={{ width: "100%", justifyContent: "space-between" }}
+          >
             <Title level={3}>{quiz.title}</Title>
             <Space>
               {/* Only show End Quiz button if isCreator is true */}
               {isCreator && (
-                <Button 
-                  type="primary" 
+                <Button
+                  type="primary"
                   danger
                   onClick={handleEndQuiz}
-                  disabled={quiz.status === 'completed'}
+                  disabled={quiz.status === "completed"}
                 >
                   End Quiz
                 </Button>
@@ -481,63 +529,64 @@ const QuizRoom = () => {
           </Space>
         }
       >
-        <Row gutter={[16, 16]}>
-          <Col span={24}>
-            <Progress 
-              percent={(timeLeft/30) * 100} 
+        <div className="quiz-content">
+          <div className="timer-section">
+            <Progress
+              percent={(timeLeft / 30) * 100}
               status="active"
               showInfo={false}
             />
-            <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-              Time Left: {timeLeft}s
+            <div className="time-display">Time Left: {timeLeft}s</div>
+          </div>
+
+          <div className="question-card">
+            <div className="question-header">
+              <Title level={4}>Question {questionIndex + 1} of {questions.length}</Title>
+              <Title level={3}>{currentQuestion.text}</Title>
             </div>
-          </Col>
-          
-          <Col span={24}>
-            <Card type="inner" title={`Question ${questionIndex + 1} of ${questions.length}`}>
-              <Title level={4}>{currentQuestion.text}</Title>
-              
-              {currentQuestion.type === "single" && (
-                <Radio.Group 
-                  onChange={(e) => setAnswer(e.target.value)} 
-                  value={answer}
-                  disabled={submitted}
-                  style={{ width: '100%', marginTop: '20px' }}
-                >
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    {currentQuestion.options?.map((opt, idx) => (
-                      <Radio key={idx} value={opt} style={{ width: '100%' }}>
-                        <Card hoverable={!submitted} style={{ width: '100%' }}>
-                          {opt}
-                        </Card>
-                      </Radio>
-                    ))}
-                  </Space>
-                </Radio.Group>
-              )}
 
-              {currentQuestion.type === "multiple" && (
-                <Checkbox.Group
-                  onChange={setAnswer}
-                  value={answer}
-                  disabled={submitted}
-                  style={{ width: '100%', marginTop: '20px' }}
-                >
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    {currentQuestion.options?.map((opt, idx) => (
-                      <Checkbox key={idx} value={opt} style={{ width: '100%' }}>
-                        <Card hoverable={!submitted} style={{ width: '100%' }}>
-                          {opt}
-                        </Card>
-                      </Checkbox>
-                    ))}
-                  </Space>
-                </Checkbox.Group>
-              )}
-            </Card>
-          </Col>
+            {currentQuestion.type === "single" && (
+              <Radio.Group
+                onChange={(e) => setAnswer(e.target.value)}
+                value={answer}
+                disabled={submitted}
+                className="options-container"
+              >
+                {currentQuestion.options?.map((opt, idx) => (
+                  <Radio key={idx} value={opt}>
+                    <Card
+                      hoverable={!submitted}
+                      className={`option-card ${answer === opt ? 'selected' : ''}`}
+                    >
+                      {opt}
+                    </Card>
+                  </Radio>
+                ))}
+              </Radio.Group>
+            )}
 
-          <Col span={24} style={{ textAlign: 'center' }}>
+            {currentQuestion.type === "multiple" && (
+              <Checkbox.Group
+                onChange={setAnswer}
+                value={answer}
+                disabled={submitted}
+                className="options-container"
+              >
+                {currentQuestion.options?.map((opt, idx) => (
+                  <Checkbox key={idx} value={opt}>
+                    <Card
+                      hoverable={!submitted}
+                      className={`option-card ${answer?.includes(opt) ? 'selected' : ''}`}
+                    >
+                      {opt}
+                    </Card>
+                  </Checkbox>
+                ))}
+              </Checkbox.Group>
+            )}
+          </div>
+
+          <div className="submit-section">
             <Button
               type="primary"
               size="large"
@@ -547,8 +596,8 @@ const QuizRoom = () => {
             >
               Submit Answer
             </Button>
-          </Col>
-        </Row>
+          </div>
+        </div>
       </Card>
     </div>
   );
