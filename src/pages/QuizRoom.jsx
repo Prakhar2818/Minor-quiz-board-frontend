@@ -476,29 +476,9 @@ const QuizRoom = () => {
             )}
           </div>
         </Card>
-      </div>
-    );
-  }
-
-  if (quizEnded) {
-    return (
-      <div className="auth-container">
-        <Card className="auth-card">
-          <Result
-            status="success"
-            title="Quiz Completed!"
-            subTitle={`Your final score: ${score} out of ${questions.length}`}
-            extra={[
-              <Button
-                type="primary"
-                key="home"
-                onClick={() => navigate("/home")}
-              >
-                Back to Home
-              </Button>,
-            ]}
-          />
-        </Card>
+        <Button type="primary" key="home" onClick={() => navigate("/home")}>
+          Back to Home
+        </Button>
       </div>
     );
   }
@@ -541,7 +521,9 @@ const QuizRoom = () => {
 
           <div className="question-card">
             <div className="question-header">
-              <Title level={4}>Question {questionIndex + 1} of {questions.length}</Title>
+              <Title level={4}>
+                Question {questionIndex + 1} of {questions.length}
+              </Title>
               <Title level={3}>{currentQuestion.text}</Title>
             </div>
 
@@ -556,7 +538,9 @@ const QuizRoom = () => {
                   <Radio key={idx} value={opt}>
                     <Card
                       hoverable={!submitted}
-                      className={`option-card ${answer === opt ? 'selected' : ''}`}
+                      className={`option-card ${
+                        answer === opt ? "selected" : ""
+                      }`}
                     >
                       {opt}
                     </Card>
@@ -576,7 +560,9 @@ const QuizRoom = () => {
                   <Checkbox key={idx} value={opt}>
                     <Card
                       hoverable={!submitted}
-                      className={`option-card ${answer?.includes(opt) ? 'selected' : ''}`}
+                      className={`option-card ${
+                        answer?.includes(opt) ? "selected" : ""
+                      }`}
                     >
                       {opt}
                     </Card>
