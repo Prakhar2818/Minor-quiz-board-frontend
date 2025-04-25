@@ -24,6 +24,23 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    build: {
+      chunkSizeWarningLimit: 1000, // Increase size limit to 1000kb
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            // Group React dependencies together
+            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            // Group Ant Design dependencies
+            'antd-vendor': ['antd'],
+            // Group other UI dependencies
+            'ui-vendor': ['bootstrap', 'react-bootstrap'],
+            // Socket.io chunk
+            'socket-vendor': ['socket.io-client'],
+          },
+        },
+      },
+    },
     optimizeDeps: {
       include: ['socket.io-client'],
     },
