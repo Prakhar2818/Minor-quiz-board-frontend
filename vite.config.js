@@ -7,6 +7,20 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    build: {
+      outDir: 'build', // Change output directory to 'build'
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+            'antd-vendor': ['antd'],
+            'ui-vendor': ['bootstrap', 'react-bootstrap'],
+            'socket-vendor': ['socket.io-client'],
+          },
+        },
+      },
+    },
     server: {
       port: 3000,
       proxy: {
@@ -21,23 +35,6 @@ export default defineConfig(({ mode }) => {
           ws: true,
           changeOrigin: true,
           secure: false,
-        },
-      },
-    },
-    build: {
-      chunkSizeWarningLimit: 1000, // Increase size limit to 1000kb
-      rollupOptions: {
-        output: {
-          manualChunks: {
-            // Group React dependencies together
-            'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-            // Group Ant Design dependencies
-            'antd-vendor': ['antd'],
-            // Group other UI dependencies
-            'ui-vendor': ['bootstrap', 'react-bootstrap'],
-            // Socket.io chunk
-            'socket-vendor': ['socket.io-client'],
-          },
         },
       },
     },
