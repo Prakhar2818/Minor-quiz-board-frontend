@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState, useContext, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Button,
@@ -34,17 +34,18 @@ const QuizRoom = () => {
   const [quiz, setQuiz] = useState({ createdBy: null });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isCreator, setIsCreator] = useState(false);
-  const [creatorId, setCreatorId] = useState(null); // This will store the creator's ID
   const [players, setPlayers] = useState([]);
   const [quizStarted, setQuizStarted] = useState(false);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [questions, setQuestions] = useState([]);
   const [answer, setAnswer] = useState("");
   const [timeLeft, setTimeLeft] = useState(30);
+  const [maxTime, setMaxTime] = useState(30);
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [quizEnded, setQuizEnded] = useState(false);
+  const [isCreator, setIsCreator] = useState(false);
+  const timerRef = useRef(null);
 
   const fetchQuizDetails = async () => {
     try {
@@ -69,15 +70,13 @@ const QuizRoom = () => {
       setQuiz(quizData);
       setQuestions(quizData.questions || []);
       setQuizStarted(quizData.status === "active");
-      setIsCreator(isCreatorStatus);
+      setIsCreator(isCreatorStatus); // This should now work
 
-      console.log(quizData.participants);
+      console.log("Creator status set to:", isCreatorStatus);
 
       if (quizData.participants) {
         setPlayers(quizData.participants);
       }
-
-      console.log("Creator status set to:", isCreatorStatus);
 
       setError(null);
     } catch (error) {
@@ -150,12 +149,22 @@ const QuizRoom = () => {
     });
 
     socket.on("quiz-started", (data) => {
+      console.log("Quiz started event received", data);
       setQuizStarted(true);
+      
+      // If questions are provided in the event, use them
       if (data.questions) {
         setQuestions(data.questions);
         setQuestionIndex(0);
-        setTimeLeft(data.questions[0]?.timeLimit || 30);
+        
+        // Set the time limit for the first question
+        const firstQuestionTimeLimit = data.questions[0]?.timeLimit || 30;
+        setTimeLeft(firstQuestionTimeLimit);
+        setMaxTime(firstQuestionTimeLimit);
       }
+      
+      setSubmitted(false);
+      setAnswer("");
     });
 
     return () => {
@@ -164,13 +173,21 @@ const QuizRoom = () => {
         username: auth.username,
         userId: auth.userId,
       });
+      
+      // Clean up socket listeners
       socket.off("player-joined");
       socket.off("player-list");
       socket.off("quiz-started");
       socket.off("quiz-ended");
       socket.off("quiz-error");
+      
+      // Clear timer interval when component unmounts
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     };
-  }, [code, auth.username, auth.userId, navigate, score]);
+  }, [code, auth.username, auth.userId, navigate]);
 
   const handleStart = async () => {
     // Check if current user is the creator
@@ -186,9 +203,18 @@ const QuizRoom = () => {
       });
 
       if (response.data.success) {
-        socket.emit("start-quiz", { code });
+        // Start the quiz locally
         setQuizStarted(true);
         setQuestions(response.data.questions);
+        
+        // Set the first question's time limit
+        const firstQuestionTimeLimit = response.data.questions[0]?.timeLimit || 30;
+        setTimeLeft(firstQuestionTimeLimit);
+        setMaxTime(firstQuestionTimeLimit);
+        
+        // Emit socket event to notify other players
+        socket.emit("start-quiz", { code });
+        
         message.success("Quiz started successfully!");
       }
     } catch (error) {
@@ -197,13 +223,59 @@ const QuizRoom = () => {
     }
   };
 
+  useEffect(() => {
+    // Only start timer when quiz is active and not submitted
+    if (quizStarted && !quizEnded && !submitted) {
+      console.log("Starting timer with", timeLeft, "seconds");
+      
+      // Clear any existing timer
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      
+      // Create new interval for countdown
+      timerRef.current = setInterval(() => {
+        setTimeLeft(prevTime => {
+          const newTime = prevTime - 1;
+          
+          // When time reaches 0, clear interval and auto-submit
+          if (newTime <= 0) {
+            clearInterval(timerRef.current);
+            if (!submitted) {
+              console.log("Time's up! Auto-submitting answer");
+              handleSubmit();
+            }
+            return 0;
+          }
+          return newTime;
+        });
+      }, 1000);
+      
+      // Cleanup function
+      return () => {
+        console.log("Clearing timer interval");
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+        }
+      };
+    }
+  }, [quizStarted, quizEnded, submitted, questionIndex]);
+
   const handleSubmit = async () => {
-    if (!answer || (Array.isArray(answer) && answer.length === 0)) {
+    if (!answer && (Array.isArray(answer) && answer.length === 0)) {
       message.warning("Please select an answer");
       return;
     }
 
+    // Clear the timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
     setLoading(true);
+    setSubmitted(true);
+    
     try {
       const response = await axios.post(`/api/quiz/submit-answer`, {
         code,
@@ -211,8 +283,6 @@ const QuizRoom = () => {
         questionIndex,
         answer: Array.isArray(answer) ? answer.sort().join(",") : answer,
       });
-
-      setSubmitted(true);
 
       if (response.data.success) {
         // Update the score with the currentScore from backend
@@ -234,7 +304,11 @@ const QuizRoom = () => {
             setQuestionIndex((prev) => prev + 1);
             setAnswer("");
             setSubmitted(false);
-            setTimeLeft(questions[questionIndex + 1]?.timeLimit || 30);
+            
+            // Set the time limit for the next question
+            const nextQuestionTimeLimit = questions[questionIndex + 1]?.timeLimit || 30;
+            setTimeLeft(nextQuestionTimeLimit);
+            setMaxTime(nextQuestionTimeLimit);
           }, 2000);
         } else {
           // Player has completed all questions
@@ -510,14 +584,25 @@ const QuizRoom = () => {
         }
       >
         <div className="quiz-content">
-          <div className="timer-section">
-            <Progress
-              percent={(timeLeft / 30) * 100}
-              status="active"
-              showInfo={false}
-            />
-            <div className="time-display">Time Left: {timeLeft}s</div>
-          </div>
+          {quizStarted && !quizEnded && (
+            <div className="timer-section">
+              <Progress
+                percent={(timeLeft / maxTime) * 100}
+                status={timeLeft < 5 ? "exception" : "active"}
+                showInfo={false}
+                strokeColor={
+                  timeLeft > (maxTime * 0.5)
+                    ? "#52c41a" // green for plenty of time
+                    : timeLeft > (maxTime * 0.2)
+                    ? "#faad14" // yellow for medium time
+                    : "#f5222d" // red for low time
+                }
+              />
+              <div className="time-display">
+                Time Left: <span className={timeLeft <= 5 ? "time-critical" : ""}>{timeLeft}s</span>
+              </div>
+            </div>
+          )}
 
           <div className="question-card">
             <div className="question-header">
