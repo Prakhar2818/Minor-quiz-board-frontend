@@ -3,11 +3,14 @@ import { useParams, useNavigate } from "react-router-dom";
 import axios from "../utils/axios";
 import { Table, Card, Button, message, Typography, Tag, Result, Space, Statistic, Row, Col } from "antd";
 import { AuthContext } from "../config/AuthContext";
+import socket from "../socket"; // Correct import path
 
 const { Title } = Typography;
 
-const Leaderboard = () => {
-  const { code } = useParams();
+const Leaderboard = ({ code: propCode, live, isCreator }) => {
+  const { code: paramCode } = useParams();
+  const code = propCode || paramCode; // Use prop if provided, otherwise use URL param
+  
   const [leaderboardData, setLeaderboardData] = useState({
     quiz: {},
     leaderboard: [],
@@ -22,7 +25,7 @@ const Leaderboard = () => {
   useEffect(() => {
     const fetchScores = async () => {
       try {
-        const res = await axios.get(`/api/quiz/leaderboard/${code}`);
+        const res = await axios.get(`/api/quiz/leaderboard/${code}${live ? '?live=true' : ''}`);
         
         if (res.data.success) {
           setLeaderboardData({
@@ -45,7 +48,30 @@ const Leaderboard = () => {
     };
 
     fetchScores();
-  }, [code]);
+    
+    // Set up polling for live leaderboard
+    let interval;
+    if (live) {
+      interval = setInterval(fetchScores, 3000); // Update every 3 seconds
+      
+      // Listen for socket events for real-time updates
+      socket.on("player-submitted", () => {
+        fetchScores();
+      });
+      
+      socket.on("answer-result", () => {
+        fetchScores();
+      });
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+      if (live) {
+        socket.off("player-submitted");
+        socket.off("answer-result");
+      }
+    };
+  }, [code, live]);
 
   const columns = [
     { 
@@ -81,22 +107,27 @@ const Leaderboard = () => {
       )
     },
     {
-      title: "Percentage",
-      dataIndex: "percentage",
-      key: "percentage",
+      title: live ? "Status" : "Percentage",
+      dataIndex: live ? "status" : "percentage",
+      key: live ? "status" : "percentage",
       width: '25%',
-      render: (percentage) => (
-        <Tag color={percentage >= 70 ? 'green' : percentage >= 40 ? 'orange' : 'red'}>
-          {percentage}%
-        </Tag>
+      render: (value, record) => (
+        live ? 
+          <Tag color={record.submitted ? 'green' : 'orange'}>
+            {record.submitted ? 'Submitted' : 'Answering...'}
+          </Tag>
+        :
+          <Tag color={value >= 70 ? 'green' : value >= 40 ? 'orange' : 'red'}>
+            {value}%
+          </Tag>
       )
     }
   ];
 
   if (loading) {
     return (
-      <div className="auth-container">
-        <Card loading={true} className="auth-card">
+      <div className={!propCode ? "auth-container" : ""}>
+        <Card loading={true} className={!propCode ? "auth-card" : ""}>
           Loading...
         </Card>
       </div>
@@ -105,8 +136,8 @@ const Leaderboard = () => {
 
   if (error) {
     return (
-      <div className="auth-container">
-        <Card className="auth-card">
+      <div className={!propCode ? "auth-container" : ""}>
+        <Card className={!propCode ? "auth-card" : ""}>
           <Result
             status="error"
             title="Failed to load leaderboard"
@@ -122,6 +153,65 @@ const Leaderboard = () => {
     );
   }
 
+  // If this is a live leaderboard embedded in another component
+  if (propCode) {
+    return (
+      <div className="live-leaderboard">
+        <Row gutter={16} style={{ marginBottom: 24 }}>
+          <Col span={8}>
+            <Statistic 
+              title="Average Score" 
+              value={Math.round(leaderboardData.metadata.averageScore * 10) / 10 || 0}
+              suffix="points"
+            />
+          </Col>
+          <Col span={8}>
+            <Statistic 
+              title="Highest Score" 
+              value={leaderboardData.metadata.highestScore || 0}
+              suffix="points"
+              valueStyle={{ color: '#3f8600' }}
+            />
+          </Col>
+          <Col span={8}>
+            <Statistic 
+              title="Total Participants" 
+              value={leaderboardData.leaderboard?.length || 0}
+            />
+          </Col>
+        </Row>
+
+        {leaderboardData.leaderboard?.length > 0 ? (
+          <Table 
+            dataSource={leaderboardData.leaderboard.map((player, index) => ({
+              ...player,
+              rank: index + 1,
+              key: player.userId
+            }))} 
+            columns={columns} 
+            pagination={false} 
+            loading={loading}
+            rowKey="userId"
+            className="leaderboard-table"
+          />
+        ) : (
+          <Result
+            status="info"
+            title="No Results Yet"
+            subTitle="The leaderboard is currently empty. Please wait for participants to submit answers."
+          />
+        )}
+        
+        {isCreator && live && (
+          <div style={{ marginTop: "20px", textAlign: "center" }}>
+            <p>As the quiz host, you're seeing the live leaderboard. Participants are seeing the quiz questions.</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Full page leaderboard (after quiz ends)
   return (
     <div className="auth-container">
       <Card 
@@ -145,14 +235,14 @@ const Leaderboard = () => {
           <Col span={8}>
             <Statistic 
               title="Average Score" 
-              value={Math.round(leaderboardData.metadata.averageScore * 10) / 10}
+              value={Math.round(leaderboardData.metadata.averageScore * 10) / 10 || 0}
               suffix="points"
             />
           </Col>
           <Col span={8}>
             <Statistic 
               title="Highest Score" 
-              value={leaderboardData.metadata.highestScore}
+              value={leaderboardData.metadata.highestScore || 0}
               suffix="points"
               valueStyle={{ color: '#3f8600' }}
             />
@@ -160,14 +250,18 @@ const Leaderboard = () => {
           <Col span={8}>
             <Statistic 
               title="Total Participants" 
-              value={leaderboardData.quiz.totalParticipants || 0}
+              value={leaderboardData.quiz.totalParticipants || leaderboardData.leaderboard?.length || 0}
             />
           </Col>
         </Row>
 
         {leaderboardData.leaderboard?.length > 0 ? (
           <Table 
-            dataSource={leaderboardData.leaderboard} 
+            dataSource={leaderboardData.leaderboard.map((player, index) => ({
+              ...player,
+              rank: index + 1,
+              key: player.userId
+            }))} 
             columns={columns} 
             pagination={false} 
             loading={loading}

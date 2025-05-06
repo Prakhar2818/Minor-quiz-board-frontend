@@ -23,6 +23,7 @@ import { AuthContext } from "../config/AuthContext";
 import socket from "../socket";
 import axios from "../utils/axios";
 import { PlayCircleOutlined } from "@ant-design/icons";
+import Leaderboard from "./Leaderboard"; // Import the Leaderboard component
 
 const { Title } = Typography;
 
@@ -45,6 +46,7 @@ const QuizRoom = () => {
   const [score, setScore] = useState(0);
   const [quizEnded, setQuizEnded] = useState(false);
   const [isCreator, setIsCreator] = useState(false);
+  const [showCreatorLeaderboard, setShowCreatorLeaderboard] = useState(false);
   const timerRef = useRef(null);
 
   const fetchQuizDetails = async () => {
@@ -70,7 +72,12 @@ const QuizRoom = () => {
       setQuiz(quizData);
       setQuestions(quizData.questions || []);
       setQuizStarted(quizData.status === "active");
-      setIsCreator(isCreatorStatus); // This should now work
+      setIsCreator(isCreatorStatus);
+      
+      // If user is creator and quiz has started, show leaderboard view
+      if (isCreatorStatus && quizData.status === "active") {
+        setShowCreatorLeaderboard(true);
+      }
 
       console.log("Creator status set to:", isCreatorStatus);
 
@@ -274,6 +281,9 @@ const QuizRoom = () => {
         setTimeLeft(firstQuestionTimeLimit);
         setMaxTime(firstQuestionTimeLimit);
         
+        // Show leaderboard for creator
+        setShowCreatorLeaderboard(true);
+        
         message.success("Quiz started successfully!");
       }
     } catch (error) {
@@ -424,6 +434,7 @@ const QuizRoom = () => {
 
   const currentQuestion = questions[questionIndex] || {};
 
+  // If loading, show loading state
   if (loading) {
     return (
       <div className="quiz-container">
@@ -439,6 +450,7 @@ const QuizRoom = () => {
     );
   }
 
+  // If error, show error state
   if (error) {
     return (
       <div className="quiz-container">
@@ -462,6 +474,7 @@ const QuizRoom = () => {
     );
   }
 
+  // If quiz not found
   if (!quiz) {
     return (
       <div className="quiz-container">
@@ -480,6 +493,74 @@ const QuizRoom = () => {
               </Button>,
             ]}
           />
+        </Card>
+      </div>
+    );
+  }
+
+  // If creator and quiz has started, show leaderboard
+  if (isCreator && quizStarted && showCreatorLeaderboard) {
+    return (
+      <div className="quiz-container">
+        <Card 
+          className="quiz-card"
+          title={
+            <Space align="center" style={{ width: "100%", justifyContent: "space-between" }}>
+              <Title level={3}>{quiz.title} - Host View</Title>
+              <Space>
+                <Button
+                  type="primary"
+                  danger
+                  onClick={handleEndQuiz}
+                  disabled={quiz.status === "completed"}
+                >
+                  End Quiz
+                </Button>
+              </Space>
+            </Space>
+          }
+        >
+          <div className="quiz-progress">
+            <Title level={4}>
+              Question {questionIndex + 1} of {questions.length}
+            </Title>
+            <Progress 
+              percent={(questionIndex + 1) / questions.length * 100} 
+              status="active"
+              format={() => `${questionIndex + 1}/${questions.length}`}
+            />
+            
+            <div className="timer-section">
+              <Progress
+                percent={(timeLeft / maxTime) * 100}
+                status={timeLeft < 5 ? "exception" : "active"}
+                showInfo={false}
+                strokeColor={
+                  timeLeft > (maxTime * 0.5)
+                    ? "#52c41a" // green for plenty of time
+                    : timeLeft > (maxTime * 0.2)
+                    ? "#faad14" // yellow for medium time
+                    : "#f5222d" // red for low time
+                }
+              />
+              <div className="time-display">
+                Time Left: <span className={timeLeft <= 5 ? "time-critical" : ""}>{timeLeft}s</span>
+              </div>
+            </div>
+            
+            <Card className="current-question-card" style={{ marginBottom: "20px" }}>
+              <Title level={5}>Current Question:</Title>
+              <p>{currentQuestion.text}</p>
+              <p><strong>Correct Answer:</strong> {
+                Array.isArray(currentQuestion.correctAnswer) 
+                  ? currentQuestion.correctAnswer.join(", ") 
+                  : currentQuestion.correctAnswer
+              }</p>
+            </Card>
+          </div>
+          
+          {/* Use the Leaderboard component with live prop */}
+          <Leaderboard code={code} live={true} isCreator={true} />
         </Card>
       </div>
     );
