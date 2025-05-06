@@ -405,7 +405,8 @@ const QuizRoom = () => {
         socket.emit("end-quiz", {
           code,
           createdBy: quiz.createdBy,
-          userId: auth.userId
+          userId: auth.userId,
+          finalScores: response.data.leaderboard // Pass the leaderboard data
         });
 
         setQuizEnded(true);
@@ -433,6 +434,36 @@ const QuizRoom = () => {
   };
 
   const currentQuestion = questions[questionIndex] || {};
+
+  // Add this function to handle question timeout
+  const handleQuestionTimeout = async () => {
+    // Check if we're at the last question
+    if (questionIndex >= questions.length - 1) {
+      // If this is the last question, end the quiz
+      console.log("Last question completed, ending quiz");
+      await handleEndQuiz();
+    } else {
+      // Move to the next question
+      const nextIndex = questionIndex + 1;
+      
+      // Emit socket event to move all players to next question
+      socket.emit("move-to-next-question", {
+        code,
+        questionNumber: nextIndex + 1,
+        question: questions[nextIndex]
+      });
+      
+      // Update local state
+      setQuestionIndex(nextIndex);
+      setAnswer("");
+      setSubmitted(false);
+      
+      // Set the time limit for the next question
+      const nextQuestionTimeLimit = questions[nextIndex]?.timeLimit || 30;
+      setTimeLeft(nextQuestionTimeLimit);
+      setMaxTime(nextQuestionTimeLimit);
+    }
+  };
 
   // If loading, show loading state
   if (loading) {
@@ -520,47 +551,59 @@ const QuizRoom = () => {
             </Space>
           }
         >
-          <div className="quiz-progress">
-            <Title level={4}>
-              Question {questionIndex + 1} of {questions.length}
-            </Title>
-            <Progress 
-              percent={(questionIndex + 1) / questions.length * 100} 
-              status="active"
-              format={() => `${questionIndex + 1}/${questions.length}`}
-            />
-            
-            <div className="timer-section">
-              <Progress
-                percent={(timeLeft / maxTime) * 100}
-                status={timeLeft < 5 ? "exception" : "active"}
-                showInfo={false}
-                strokeColor={
-                  timeLeft > (maxTime * 0.5)
-                    ? "#52c41a" // green for plenty of time
-                    : timeLeft > (maxTime * 0.2)
-                    ? "#faad14" // yellow for medium time
-                    : "#f5222d" // red for low time
-                }
-              />
-              <div className="time-display">
-                Time Left: <span className={timeLeft <= 5 ? "time-critical" : ""}>{timeLeft}s</span>
+          {!quizEnded ? (
+            <>
+              <div className="quiz-progress">
+                <Title level={4}>
+                  Question {questionIndex + 1} of {questions.length}
+                </Title>
+                <Progress 
+                  percent={(questionIndex + 1) / questions.length * 100} 
+                  status="active"
+                  format={() => `${questionIndex + 1}/${questions.length}`}
+                />
+                
+                <div className="timer-section">
+                  <Progress
+                    percent={(timeLeft / maxTime) * 100}
+                    status={timeLeft < 5 ? "exception" : "active"}
+                    showInfo={false}
+                    strokeColor={
+                      timeLeft > (maxTime * 0.5)
+                        ? "#52c41a" // green for plenty of time
+                        : timeLeft > (maxTime * 0.2)
+                        ? "#faad14" // yellow for medium time
+                        : "#f5222d" // red for low time
+                    }
+                  />
+                  <div className="time-display">
+                    Time Left: <span className={timeLeft <= 5 ? "time-critical" : ""}>{timeLeft}s</span>
+                  </div>
+                </div>
+                
+                <Card className="current-question-card" style={{ marginBottom: "20px" }}>
+                  <Title level={5}>Current Question:</Title>
+                  <p>{currentQuestion.text}</p>
+                  <p><strong>Correct Answer:</strong> {
+                    Array.isArray(currentQuestion.correctAnswer) 
+                      ? currentQuestion.correctAnswer.join(", ") 
+                      : currentQuestion.correctAnswer
+                  }</p>
+                </Card>
               </div>
+              
+              {/* Use the Leaderboard component with live prop */}
+              <Leaderboard code={code} live={true} isCreator={true} />
+            </>
+          ) : (
+            <div style={{ textAlign: "center", padding: "20px" }}>
+              <Result
+                status="success"
+                title="Quiz Completed!"
+                subTitle="Redirecting to the final leaderboard..."
+              />
             </div>
-            
-            <Card className="current-question-card" style={{ marginBottom: "20px" }}>
-              <Title level={5}>Current Question:</Title>
-              <p>{currentQuestion.text}</p>
-              <p><strong>Correct Answer:</strong> {
-                Array.isArray(currentQuestion.correctAnswer) 
-                  ? currentQuestion.correctAnswer.join(", ") 
-                  : currentQuestion.correctAnswer
-              }</p>
-            </Card>
-          </div>
-          
-          {/* Use the Leaderboard component with live prop */}
-          <Leaderboard code={code} live={true} isCreator={true} />
+          )}
         </Card>
       </div>
     );
