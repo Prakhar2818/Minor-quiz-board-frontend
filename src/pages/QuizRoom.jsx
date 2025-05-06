@@ -538,16 +538,7 @@ const QuizRoom = () => {
           title={
             <Space align="center" style={{ width: "100%", justifyContent: "space-between" }}>
               <Title level={3}>{quiz.title} - Host View</Title>
-              <Space>
-                <Button
-                  type="primary"
-                  danger
-                  onClick={handleEndQuiz}
-                  disabled={quiz.status === "completed"}
-                >
-                  End Quiz
-                </Button>
-              </Space>
+              {/* End Quiz button removed */}
             </Space>
           }
         >
@@ -740,19 +731,7 @@ const QuizRoom = () => {
             style={{ width: "100%", justifyContent: "space-between" }}
           >
             <Title level={3}>{quiz.title}</Title>
-            <Space>
-              {/* Only show End Quiz button if isCreator is true */}
-              {isCreator && (
-                <Button
-                  type="primary"
-                  danger
-                  onClick={handleEndQuiz}
-                  disabled={quiz.status === "completed"}
-                >
-                  End Quiz
-                </Button>
-              )}
-            </Space>
+            {/* End Quiz button removed */}
           </Space>
         }
       >
