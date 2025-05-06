@@ -184,6 +184,13 @@ const QuizRoom = () => {
 
     socket.on("next-question", (data) => {
       console.log("Next question received", data);
+      
+      // Clear any existing timer
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      
       if (data.question) {
         setQuestionIndex(data.questionNumber - 1);
         setAnswer("");
@@ -276,8 +283,8 @@ const QuizRoom = () => {
   };
 
   useEffect(() => {
-    // Only start timer when quiz is active and not submitted
-    if (quizStarted && !quizEnded && !submitted) {
+    // Only start timer when quiz is active and not ended
+    if (quizStarted && !quizEnded) {
       console.log("Starting timer with", timeLeft, "seconds");
       
       // Clear any existing timer
@@ -290,12 +297,14 @@ const QuizRoom = () => {
         setTimeLeft(prevTime => {
           const newTime = prevTime - 1;
           
-          // When time reaches 0, clear interval and auto-submit
+          // When time reaches 0, clear interval and handle time expiration
           if (newTime <= 0) {
             clearInterval(timerRef.current);
-            if (!submitted) {
-              console.log("Time's up! Auto-submitting answer");
-              handleSubmit();
+            timerRef.current = null;
+            
+            // Only the host should advance the question
+            if (isCreator) {
+              handleQuestionTimeout();
             }
             return 0;
           }
@@ -308,21 +317,16 @@ const QuizRoom = () => {
         console.log("Clearing timer interval");
         if (timerRef.current) {
           clearInterval(timerRef.current);
+          timerRef.current = null;
         }
       };
     }
-  }, [quizStarted, quizEnded, submitted, questionIndex]);
+  }, [quizStarted, quizEnded, questionIndex]);
 
   const handleSubmit = async () => {
     if (!answer && (Array.isArray(answer) && answer.length === 0)) {
       message.warning("Please select an answer");
       return;
-    }
-
-    // Clear the timer
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
     }
     
     setLoading(true);
@@ -334,9 +338,9 @@ const QuizRoom = () => {
         code,
         questionIndex,
         answer: Array.isArray(answer) ? answer.sort().join(",") : answer,
+        username: auth.username,
+        userId: auth.userId
       });
-      
-      // The result will be handled by the "answer-result" socket event
       
       // For fallback, also make the API call
       const response = await axios.post(`/api/quiz/submit-answer`, {
@@ -359,25 +363,8 @@ const QuizRoom = () => {
             `Incorrect. The correct answer was: ${response.data.correctAnswer}`
           );
         }
-
-        // Move to next question if available
-        if (questionIndex < questions.length - 1) {
-          setTimeout(() => {
-            setQuestionIndex((prev) => prev + 1);
-            setAnswer("");
-            setSubmitted(false);
-            
-            // Set the time limit for the next question
-            const nextQuestionTimeLimit = questions[questionIndex + 1]?.timeLimit || 30;
-            setTimeLeft(nextQuestionTimeLimit);
-            setMaxTime(nextQuestionTimeLimit);
-          }, 2000);
-        } else {
-          // Player has completed all questions
-          message.info(
-            "You've completed all questions! Waiting for the host to end the quiz..."
-          );
-        }
+        
+        // Don't move to next question here - wait for timer to finish
       }
     } catch (error) {
       console.error("Failed to submit answer:", error);
@@ -720,15 +707,24 @@ const QuizRoom = () => {
           </div>
 
           <div className="submit-section">
-            <Button
-              type="primary"
-              size="large"
-              onClick={handleSubmit}
-              disabled={submitted || !answer}
-              loading={loading}
-            >
-              Submit Answer
-            </Button>
+            {submitted ? (
+              <Alert
+                message="Answer Submitted"
+                description="Waiting for the timer to complete. The next question will appear automatically."
+                type="success"
+                showIcon
+              />
+            ) : (
+              <Button
+                type="primary"
+                size="large"
+                onClick={handleSubmit}
+                disabled={!answer || (Array.isArray(answer) && answer.length === 0)}
+                loading={loading}
+              >
+                Submit Answer
+              </Button>
+            )}
           </div>
         </div>
       </Card>
