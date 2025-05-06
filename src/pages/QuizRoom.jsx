@@ -114,14 +114,22 @@ const QuizRoom = () => {
 
     socket.on("quiz-ended", (data) => {
       console.log("Quiz ended event received", data);
+      
+      // Update local state
       setQuizEnded(true);
+      setQuiz(prev => prev ? {...prev, status: 'completed'} : prev);
 
-      // Store final score before redirecting
-      localStorage.setItem(`quiz_${code}_final_score`, score);
+      // Store final scores for the leaderboard
+      if (data.finalScores) {
+        localStorage.setItem(`quiz_${code}_final_scores`, JSON.stringify(data.finalScores));
+      }
+      
+      // Store the quiz code for the leaderboard
+      localStorage.setItem(`quiz_${code}_code`, code);
 
-      message.info(
-        "Quiz has been ended by the host. Redirecting to leaderboard..."
-      );
+      message.info("Quiz has ended. Redirecting to leaderboard...");
+      
+      // Redirect to leaderboard
       setTimeout(() => {
         navigate(`/leaderboard/${code}`);
       }, 1500);
@@ -148,6 +156,13 @@ const QuizRoom = () => {
       setPlayers(playerList);
     });
 
+    socket.on("player-left", (data) => {
+      setPlayers((currentPlayers) => 
+        currentPlayers.filter(p => p.userId !== data.userId)
+      );
+      message.info(`${data.username} left the quiz`);
+    });
+
     socket.on("quiz-started", (data) => {
       console.log("Quiz started event received", data);
       setQuizStarted(true);
@@ -167,6 +182,35 @@ const QuizRoom = () => {
       setAnswer("");
     });
 
+    socket.on("next-question", (data) => {
+      console.log("Next question received", data);
+      if (data.question) {
+        setQuestionIndex(data.questionNumber - 1);
+        setAnswer("");
+        setSubmitted(false);
+        
+        // Set the time limit for this question
+        const questionTimeLimit = data.question.timeLimit || 30;
+        setTimeLeft(questionTimeLimit);
+        setMaxTime(questionTimeLimit);
+      }
+    });
+
+    socket.on("answer-result", (data) => {
+      console.log("Answer result received", data);
+      setScore(data.score);
+      
+      if (data.correct) {
+        message.success(`Correct! Your current score is ${data.score}`);
+      } else {
+        message.error(`Incorrect. Your current score is ${data.score}`);
+      }
+    });
+
+    socket.on("player-submitted", (data) => {
+      message.info(`${data.username} submitted their answer`);
+    });
+
     return () => {
       socket.emit("leave-room", {
         code,
@@ -176,10 +220,14 @@ const QuizRoom = () => {
       
       // Clean up socket listeners
       socket.off("player-joined");
+      socket.off("player-left");
       socket.off("player-list");
       socket.off("quiz-started");
       socket.off("quiz-ended");
       socket.off("quiz-error");
+      socket.off("next-question");
+      socket.off("answer-result");
+      socket.off("player-submitted");
       
       // Clear timer interval when component unmounts
       if (timerRef.current) {
@@ -197,13 +245,20 @@ const QuizRoom = () => {
     }
 
     try {
+      // First make the API call to start the quiz
       const response = await axios.post(`/api/quiz/start`, {
         code,
         creatorName: auth.username,
       });
 
       if (response.data.success) {
-        // Start the quiz locally
+        // After successful API call, emit socket event to notify other players
+        socket.emit("start-quiz", { 
+          code,
+          userId: auth.userId  // Send userId for creator verification
+        });
+        
+        // Update local state
         setQuizStarted(true);
         setQuestions(response.data.questions);
         
@@ -211,9 +266,6 @@ const QuizRoom = () => {
         const firstQuestionTimeLimit = response.data.questions[0]?.timeLimit || 30;
         setTimeLeft(firstQuestionTimeLimit);
         setMaxTime(firstQuestionTimeLimit);
-        
-        // Emit socket event to notify other players
-        socket.emit("start-quiz", { code });
         
         message.success("Quiz started successfully!");
       }
@@ -277,6 +329,16 @@ const QuizRoom = () => {
     setSubmitted(true);
     
     try {
+      // Use socket to submit answer
+      socket.emit("submit-answer", {
+        code,
+        questionIndex,
+        answer: Array.isArray(answer) ? answer.sort().join(",") : answer,
+      });
+      
+      // The result will be handled by the "answer-result" socket event
+      
+      // For fallback, also make the API call
       const response = await axios.post(`/api/quiz/submit-answer`, {
         code,
         userId: auth.userId,
@@ -315,17 +377,10 @@ const QuizRoom = () => {
           message.info(
             "You've completed all questions! Waiting for the host to end the quiz..."
           );
-
-          // Notify server about completion
-          socket.emit("player-completed", {
-            code,
-            userId: auth.userId,
-            username: auth.username,
-            finalScore: response.data.currentScore,
-          });
         }
       }
     } catch (error) {
+      console.error("Failed to submit answer:", error);
       message.error("Failed to submit answer");
     } finally {
       setLoading(false);
@@ -339,22 +394,30 @@ const QuizRoom = () => {
     }
 
     try {
+      console.log("Attempting to end quiz with code:", code);
+      
       // First make the API call to end the quiz
       const response = await axios.post(`/api/quiz/${code}/end`, {
         code,
-        createdBy: quiz.createdBy, // Using the quiz's createdBy ID
+        createdBy: quiz.createdBy, // Using the quiz's createdBy ID for authorization
+        userId: auth.userId // Only used to mark current user in leaderboard
       });
 
       if (response.data.success) {
-        // Emit socket event after successful API call
+        // After successful API call, emit socket event to notify all players
         socket.emit("end-quiz", {
           code,
           createdBy: quiz.createdBy,
-          finalScores: response.data.finalScores, // Pass the final scores from API response
+          userId: auth.userId
         });
 
         setQuizEnded(true);
         message.success("Quiz ended successfully");
+        
+        // Navigate to leaderboard
+        setTimeout(() => {
+          navigate(`/leaderboard/${code}`);
+        }, 1000);
       }
     } catch (error) {
       console.error("Failed to end quiz:", error);
@@ -370,7 +433,6 @@ const QuizRoom = () => {
         message.error(error.response?.data?.error || "Failed to end quiz");
       }
     }
-    navigate(`/leaderboard/${code}`);
   };
 
   const currentQuestion = questions[questionIndex] || {};
