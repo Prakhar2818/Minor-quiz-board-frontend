@@ -73,7 +73,7 @@ const QuizRoom = () => {
       setQuestions(quizData.questions || []);
       setQuizStarted(quizData.status === "active");
       setIsCreator(isCreatorStatus);
-      
+
       // If user is creator and quiz has started, show leaderboard view
       if (isCreatorStatus && quizData.status === "active") {
         setShowCreatorLeaderboard(true);
@@ -121,21 +121,24 @@ const QuizRoom = () => {
 
     socket.on("quiz-ended", (data) => {
       console.log("Quiz ended event received", data);
-      
+
       // Update local state
       setQuizEnded(true);
-      setQuiz(prev => prev ? {...prev, status: 'completed'} : prev);
+      setQuiz((prev) => (prev ? { ...prev, status: "completed" } : prev));
 
       // Store final scores for the leaderboard
       if (data.finalScores) {
-        localStorage.setItem(`quiz_${code}_final_scores`, JSON.stringify(data.finalScores));
+        localStorage.setItem(
+          `quiz_${code}_final_scores`,
+          JSON.stringify(data.finalScores)
+        );
       }
-      
+
       // Store the quiz code for the leaderboard
       localStorage.setItem(`quiz_${code}_code`, code);
 
       message.info("Quiz has ended. Redirecting to leaderboard...");
-      
+
       // Redirect to leaderboard
       setTimeout(() => {
         navigate(`/leaderboard/${code}`);
@@ -164,8 +167,8 @@ const QuizRoom = () => {
     });
 
     socket.on("player-left", (data) => {
-      setPlayers((currentPlayers) => 
-        currentPlayers.filter(p => p.userId !== data.userId)
+      setPlayers((currentPlayers) =>
+        currentPlayers.filter((p) => p.userId !== data.userId)
       );
       message.info(`${data.username} left the quiz`);
     });
@@ -173,36 +176,36 @@ const QuizRoom = () => {
     socket.on("quiz-started", (data) => {
       console.log("Quiz started event received", data);
       setQuizStarted(true);
-      
+
       // If questions are provided in the event, use them
       if (data.questions) {
         setQuestions(data.questions);
         setQuestionIndex(0);
-        
+
         // Set the time limit for the first question
         const firstQuestionTimeLimit = data.questions[0]?.timeLimit || 30;
         setTimeLeft(firstQuestionTimeLimit);
         setMaxTime(firstQuestionTimeLimit);
       }
-      
+
       setSubmitted(false);
       setAnswer("");
     });
 
     socket.on("next-question", (data) => {
       console.log("Next question received", data);
-      
+
       // Clear any existing timer
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
-      
+
       if (data.question) {
         setQuestionIndex(data.questionNumber - 1);
         setAnswer("");
         setSubmitted(false);
-        
+
         // Set the time limit for this question
         const questionTimeLimit = data.question.timeLimit || 30;
         setTimeLeft(questionTimeLimit);
@@ -213,7 +216,7 @@ const QuizRoom = () => {
     socket.on("answer-result", (data) => {
       console.log("Answer result received", data);
       setScore(data.score);
-      
+
       if (data.correct) {
         message.success(`Correct! Your current score is ${data.score}`);
       } else {
@@ -231,7 +234,7 @@ const QuizRoom = () => {
         username: auth.username,
         userId: auth.userId,
       });
-      
+
       // Clean up socket listeners
       socket.off("player-joined");
       socket.off("player-left");
@@ -242,7 +245,7 @@ const QuizRoom = () => {
       socket.off("next-question");
       socket.off("answer-result");
       socket.off("player-submitted");
-      
+
       // Clear timer interval when component unmounts
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -267,23 +270,24 @@ const QuizRoom = () => {
 
       if (response.data.success) {
         // After successful API call, emit socket event to notify other players
-        socket.emit("start-quiz", { 
+        socket.emit("start-quiz", {
           code,
-          userId: auth.userId  // Send userId for creator verification
+          userId: auth.userId, // Send userId for creator verification
         });
-        
+
         // Update local state
         setQuizStarted(true);
         setQuestions(response.data.questions);
-        
+
         // Set the first question's time limit
-        const firstQuestionTimeLimit = response.data.questions[0]?.timeLimit || 30;
+        const firstQuestionTimeLimit =
+          response.data.questions[0]?.timeLimit || 30;
         setTimeLeft(firstQuestionTimeLimit);
         setMaxTime(firstQuestionTimeLimit);
-        
+
         // Show leaderboard for creator
         setShowCreatorLeaderboard(true);
-        
+
         message.success("Quiz started successfully!");
       }
     } catch (error) {
@@ -296,22 +300,22 @@ const QuizRoom = () => {
     // Only start timer when quiz is active and not ended
     if (quizStarted && !quizEnded) {
       console.log("Starting timer with", timeLeft, "seconds");
-      
+
       // Clear any existing timer
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
-      
+
       // Create new interval for countdown
       timerRef.current = setInterval(() => {
-        setTimeLeft(prevTime => {
+        setTimeLeft((prevTime) => {
           const newTime = prevTime - 1;
-          
+
           // When time reaches 0, clear interval and handle time expiration
           if (newTime <= 0) {
             clearInterval(timerRef.current);
             timerRef.current = null;
-            
+
             // Only the host should advance the question
             if (isCreator) {
               handleQuestionTimeout();
@@ -321,7 +325,7 @@ const QuizRoom = () => {
           return newTime;
         });
       }, 1000);
-      
+
       // Cleanup function
       return () => {
         console.log("Clearing timer interval");
@@ -334,14 +338,14 @@ const QuizRoom = () => {
   }, [quizStarted, quizEnded, questionIndex]);
 
   const handleSubmit = async () => {
-    if (!answer && (Array.isArray(answer) && answer.length === 0)) {
+    if (!answer && Array.isArray(answer) && answer.length === 0) {
       message.warning("Please select an answer");
       return;
     }
-    
+
     setLoading(true);
     setSubmitted(true);
-    
+
     try {
       // Use socket to submit answer
       socket.emit("submit-answer", {
@@ -349,9 +353,9 @@ const QuizRoom = () => {
         questionIndex,
         answer: Array.isArray(answer) ? answer.sort().join(",") : answer,
         username: auth.username,
-        userId: auth.userId
+        userId: auth.userId,
       });
-      
+
       // For fallback, also make the API call
       const response = await axios.post(`/api/quiz/submit-answer`, {
         code,
@@ -373,7 +377,7 @@ const QuizRoom = () => {
             `Incorrect. The correct answer was: ${response.data.correctAnswer}`
           );
         }
-        
+
         // Don't move to next question here - wait for timer to finish
       }
     } catch (error) {
@@ -392,12 +396,12 @@ const QuizRoom = () => {
 
     try {
       console.log("Attempting to end quiz with code:", code);
-      
+
       // First make the API call to end the quiz
       const response = await axios.post(`/api/quiz/${code}/end`, {
         code,
         createdBy: quiz.createdBy, // Using the quiz's createdBy ID for authorization
-        userId: auth.userId // Only used to mark current user in leaderboard
+        userId: auth.userId, // Only used to mark current user in leaderboard
       });
 
       if (response.data.success) {
@@ -406,12 +410,12 @@ const QuizRoom = () => {
           code,
           createdBy: quiz.createdBy,
           userId: auth.userId,
-          finalScores: response.data.leaderboard // Pass the leaderboard data
+          finalScores: response.data.leaderboard, // Pass the leaderboard data
         });
 
         setQuizEnded(true);
         message.success("Quiz ended successfully");
-        
+
         // Navigate to leaderboard
         setTimeout(() => {
           navigate(`/leaderboard/${code}`);
@@ -445,19 +449,19 @@ const QuizRoom = () => {
     } else {
       // Move to the next question
       const nextIndex = questionIndex + 1;
-      
+
       // Emit socket event to move all players to next question
       socket.emit("move-to-next-question", {
         code,
         questionNumber: nextIndex + 1,
-        question: questions[nextIndex]
+        question: questions[nextIndex],
       });
-      
+
       // Update local state
       setQuestionIndex(nextIndex);
       setAnswer("");
       setSubmitted(false);
-      
+
       // Set the time limit for the next question
       const nextQuestionTimeLimit = questions[nextIndex]?.timeLimit || 30;
       setTimeLeft(nextQuestionTimeLimit);
@@ -533,10 +537,13 @@ const QuizRoom = () => {
   if (isCreator && quizStarted && showCreatorLeaderboard) {
     return (
       <div className="quiz-container">
-        <Card 
+        <Card
           className="quiz-card"
           title={
-            <Space align="center" style={{ width: "100%", justifyContent: "space-between" }}>
+            <Space
+              align="center"
+              style={{ width: "100%", justifyContent: "space-between" }}
+            >
               <Title level={3}>{quiz.title} - Host View</Title>
               {/* End Quiz button removed */}
             </Space>
@@ -548,41 +555,48 @@ const QuizRoom = () => {
                 <Title level={4}>
                   Question {questionIndex + 1} of {questions.length}
                 </Title>
-                <Progress 
-                  percent={(questionIndex + 1) / questions.length * 100} 
+                <Progress
+                  percent={((questionIndex + 1) / questions.length) * 100}
                   status="active"
                   format={() => `${questionIndex + 1}/${questions.length}`}
                 />
-                
+
                 <div className="timer-section">
                   <Progress
                     percent={(timeLeft / maxTime) * 100}
                     status={timeLeft < 5 ? "exception" : "active"}
                     showInfo={false}
                     strokeColor={
-                      timeLeft > (maxTime * 0.5)
+                      timeLeft > maxTime * 0.5
                         ? "#52c41a" // green for plenty of time
-                        : timeLeft > (maxTime * 0.2)
+                        : timeLeft > maxTime * 0.2
                         ? "#faad14" // yellow for medium time
                         : "#f5222d" // red for low time
                     }
                   />
                   <div className="time-display">
-                    Time Left: <span className={timeLeft <= 5 ? "time-critical" : ""}>{timeLeft}s</span>
+                    Time Left:{" "}
+                    <span className={timeLeft <= 5 ? "time-critical" : ""}>
+                      {timeLeft}s
+                    </span>
                   </div>
                 </div>
-                
-                <Card className="current-question-card" style={{ marginBottom: "20px" }}>
+
+                <Card
+                  className="current-question-card"
+                  style={{ marginBottom: "20px" }}
+                >
                   <Title level={5}>Current Question:</Title>
                   <p>{currentQuestion.text}</p>
-                  <p><strong>Correct Answer:</strong> {
-                    Array.isArray(currentQuestion.correctAnswer) 
-                      ? currentQuestion.correctAnswer.join(", ") 
-                      : currentQuestion.correctAnswer
-                  }</p>
+                  <p>
+                    <strong>Correct Answer:</strong>{" "}
+                    {Array.isArray(currentQuestion.correctAnswer)
+                      ? currentQuestion.correctAnswer.join(", ")
+                      : currentQuestion.correctAnswer}
+                  </p>
                 </Card>
               </div>
-              
+
               {/* Use the Leaderboard component with live prop */}
               <Leaderboard code={code} live={true} isCreator={true} />
             </>
@@ -743,15 +757,18 @@ const QuizRoom = () => {
                 status={timeLeft < 5 ? "exception" : "active"}
                 showInfo={false}
                 strokeColor={
-                  timeLeft > (maxTime * 0.5)
+                  timeLeft > maxTime * 0.5
                     ? "#52c41a" // green for plenty of time
-                    : timeLeft > (maxTime * 0.2)
+                    : timeLeft > maxTime * 0.2
                     ? "#faad14" // yellow for medium time
                     : "#f5222d" // red for low time
                 }
               />
               <div className="time-display">
-                Time Left: <span className={timeLeft <= 5 ? "time-critical" : ""}>{timeLeft}s</span>
+                Time Left:{" "}
+                <span className={timeLeft <= 5 ? "time-critical" : ""}>
+                  {timeLeft}s
+                </span>
               </div>
             </div>
           )}
@@ -822,7 +839,9 @@ const QuizRoom = () => {
                 type="primary"
                 size="large"
                 onClick={handleSubmit}
-                disabled={!answer || (Array.isArray(answer) && answer.length === 0)}
+                disabled={
+                  !answer || (Array.isArray(answer) && answer.length === 0)
+                }
                 loading={loading}
               >
                 Submit Answer

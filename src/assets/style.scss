@@ -80,10 +80,10 @@ body {
   .auth-footer {
     margin-top: 20px;
     text-align: center;
-    color: white;
+    color: black;
     
     a {
-      color: white;
+      color: $primary-color;
       text-decoration: underline;
       
       &:hover {
